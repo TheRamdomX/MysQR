@@ -45,8 +45,9 @@ func (s *DatabaseService) GetCurrentModuleID() (int, error) {
 	query := `
 		SELECT ID 
 		FROM Modulos 
-		WHERE HoraInicio <= CURRENT_TIME 
-		AND HoraFin >= CURRENT_TIME 
+		WHERE Fecha = CURRENT_DATE
+		AND HoraInicio <= CURRENT_TIME
+		AND HoraFin >= CURRENT_TIME;
 	`
 	var moduleID int
 	err := s.db.QueryRow(query).Scan(&moduleID)
@@ -111,7 +112,7 @@ func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID int) error {
 
 	query := `
 		INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd)
-		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, false)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 0)
 	`
 	_, err = s.db.Exec(query, alumnoID, seccionID, moduleID)
 	return err
@@ -194,7 +195,6 @@ func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.Mo
 		FROM ProgramacionClases pc
 		WHERE pc.ProfesorID = $1 
 		AND pc.ModuloID = $2
-		AND pc.DiaSemana = EXTRACT(DOW FROM CURRENT_DATE)
 	`
 	var seccionID int
 	err = s.db.QueryRow(query, profesorID, moduleID).Scan(&seccionID)

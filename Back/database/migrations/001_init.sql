@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS pg_prewarm;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
-CREATE DATABASE IF NOT EXISTS asistencia_db;
+CREATE DATABASE asistencia_db;
 
 \c asistencia_db
 
@@ -13,7 +13,7 @@ SELECT pg_reload_conf();
 
 CREATE TABLE IF NOT EXISTS Profesores (
   ID int PRIMARY KEY,
-  Rut int UNIQUE,
+  Rut int,
   Nombre varchar,
   Apellido varchar,
   Rol int
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS Profesores (
 
 CREATE TABLE IF NOT EXISTS Alumnos (
   ID int PRIMARY KEY,
-  Rut int UNIQUE,
+  Rut int,
   Nombre varchar,
   Apellido varchar
 );
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS LogIn (
 
 CREATE TABLE IF NOT EXISTS AUTH (
   ID int PRIMARY KEY,
-  User varchar,
+  Username varchar,
   Password varchar, -- GUARDAR CON HASH
   Rol varchar,
   Rut int 
@@ -125,96 +125,145 @@ ALTER TABLE ReporteAsistencia ADD FOREIGN KEY (SeccionID) REFERENCES Secciones(I
 ALTER TABLE ReporteAsistencia ADD FOREIGN KEY (ModuloID) REFERENCES Modulos(ID);
 ALTER TABLE MACs ADD FOREIGN KEY (AlumnoID) REFERENCES Alumnos(ID);
 
--- Insertar datos?
--- yo caxo que desde aca nomas
+-- Insertar datos
 
-DO $$
-DECLARE
-  nombres_prof TEXT[] := ARRAY[
-    'Juan', 'María', 'Carlos', 'Ana', 'Luis', 'Carmen', 'Pedro', 'Isabel', 'Diego', 'Laura'
-  ];
-  apellidos_prof TEXT[] := ARRAY[
-    'García', 'Rodríguez', 'López', 'Martínez', 'Sánchez', 'Pérez', 'González', 'Muñoz', 'Flores', 'Díaz'
-  ];
-  nombres_alum TEXT[] := ARRAY[
-    'Alejandro', 'Valentina', 'Sebastián', 'Camila', 'Matías', 'Francisca', 'Luciano', 'Antonella', 'Ignacio', 'Mariana'
-  ];
-  asignaturas_nombres TEXT[] := ARRAY[
-    'A', 'B', 'C', 'D', 'E'
-  ];
-  ubicaciones TEXT[] := ARRAY[
-    '101', '102', '103', '104', '105', '201', '202', '203', '204', '205'
-  ];
-  modulos_fechas DATE[] := ARRAY[
-    '2023-04-01', '2023-04-03', '2023-04-05', '2023-04-08', '2023-04-10',
-    '2023-04-12', '2023-04-15', '2023-04-17', '2023-04-19', '2023-04-22',
-    '2023-04-24', '2023-04-26', '2023-04-29', '2023-05-01', '2023-05-03'
-  ];
-  codigos_mac TEXT[] := ARRAY[
-    '00:1B:44:11:3A:B7', '00:0D:3C:04:78:5B', '00:1C:B3:08:76:21', '00:19:E3:CA:44:55',
-    '00:1F:C2:09:78:AB', '00:1A:2B:3C:4D:5E', '00:11:22:33:44:55', '64:00:6A:42:59:5D',
-    '00:1E:4F:55:66:77', '00:1D:3C:44:55:66', '00:1C:B3:08:76:22', '00:19:E3:CA:44:56'
-  ];
 
-  BEGIN
-  -- Insert Profesores (10)
-  FOR i IN 1..10 LOOP
-    INSERT INTO Profesores (ID, Rut, Nombre, Apellido, Rol)
-    VALUES (i, 10000000 + i*10, nombres_prof[i], apellidos_prof[i], 1);
-  END LOOP;
+-- Insertar profesores
+INSERT INTO Profesores (ID, Rut, Nombre, Apellido, Rol) VALUES
+(1, 11111111, 'Juan', 'Pérez', 1),
+(2, 22222222, 'María', 'González', 1),
+(3, 33333333, 'Carlos', 'Rodríguez', 1);
 
-  -- Insert Alumnos (10)
-  FOR i IN 1..10 LOOP
-    INSERT INTO Alumnos (ID, Rut, Nombre, Apellido)
-    VALUES (i, 20000000 + i*10, nombres_alum[i], apellidos_prof[i]);
-  END LOOP;
+-- Insertar alumnos
+INSERT INTO Alumnos (ID, Rut, Nombre, Apellido) VALUES
+(1, 11111111, 'Ana', 'Martínez'),
+(2, 22222222, 'Pedro', 'Sánchez'),
+(3, 33333333, 'Laura', 'López'),
+(4, 44444444, 'Diego', 'Ramírez'),
+(5, 55555555, 'Camila', 'Torres');
 
-  -- Insert Asignaturas (5)
-  FOR i IN 1..5 LOOP
-    INSERT INTO Asignaturas (ID, Nombre, Codigo)
-    VALUES (i, asignaturas_nombres[i], 'ASIG-' || LPAD(i::TEXT, 3, '0'));
-  END LOOP;
+-- Insertar asignaturas
+INSERT INTO Asignaturas (ID, Nombre, Codigo) VALUES
+(1, 'Programación I', 'PROG101'),
+(2, 'Bases de Datos', 'BD101'),
+(3, 'Redes', 'RED101');
 
-  -- Insert Modulos (15)
-  FOR i IN 1..15 LOOP
-    INSERT INTO Modulos (ID, Fecha, HoraInicio, HoraFin)
-    VALUES (i, modulos_fechas[i], 
-      ('08:00'::TIME + (i*2 || ' hours')::INTERVAL),
-      ('10:00'::TIME + (i*2 || ' hours')::INTERVAL));
-  END LOOP;
+-- Insertar secciones (relacionan asignaturas y profesores)
+INSERT INTO Secciones (ID, AsignaturaID, ProfesorID, Ubicacion) VALUES
+(1, 1, 1, 'Sala 101'),
+(2, 2, 2, 'Sala 102'),
+(3, 3, 3, 'Sala 201');
 
-  -- Insert ProgramacionClases (~40 entries)
-  FOR s IN 1..20 LOOP
-    FOR m IN 1..2 LOOP
-      INSERT INTO ProgramacionClases (ID, SeccionID, ModuloID, TipoSesion)
-      VALUES ((s-1)*2 + m, s, ((s + m -1)%15)+1, (random()*3)::INT);
-    END LOOP;
-  END LOOP;
 
-  -- Insert Inscripciones (~50 entries)
-  FOR a IN 1..10 LOOP
-    FOR s IN 1..5 LOOP
-      INSERT INTO Inscripciones (ID, AlumnoID, SeccionID)
-      VALUES ((a-1)*5 + s, a, ((a + s -1)%20)+1);
-    END LOOP;
-  END LOOP;
+-- Insertar módulos
+INSERT INTO Modulos (ID, Fecha, HoraInicio, HoraFin) VALUES
+(1, CURRENT_DATE - 1, '08:30', '10:00'),
+(2, CURRENT_DATE - 1, '10:00', '11:30'),
+(3, CURRENT_DATE - 1, '11:30', '13:00'),
+(4, CURRENT_DATE - 1, '13:00', '14:30'),
+(5, CURRENT_DATE - 1, '14:30', '16:00'),
+(6, CURRENT_DATE - 1, '16:00', '17:30'),
+(7, CURRENT_DATE - 1, '17:30', '19:00'),
+(8, CURRENT_DATE , '08:30', '10:00'),
+(9, CURRENT_DATE , '10:00', '11:30'),
+(10, CURRENT_DATE , '11:30', '13:00'),
+(11, CURRENT_DATE , '13:00', '14:30'),
+(12, CURRENT_DATE , '14:30', '16:00'),
+(13, CURRENT_DATE , '16:00', '17:30'),
+(14, CURRENT_DATE , '17:30', '19:00'),
+(15, CURRENT_DATE + 1, '08:30', '10:00'),
+(16, CURRENT_DATE + 1, '10:00', '11:30'),
+(17, CURRENT_DATE + 1, '11:30', '13:00'),
+(18, CURRENT_DATE + 1, '13:00', '14:30'),
+(19, CURRENT_DATE + 1, '14:30', '16:00'),
+(20, CURRENT_DATE + 1, '16:00', '17:30'),
+(21, CURRENT_DATE + 1, '17:30', '19:00'),
+(22, CURRENT_DATE - 2, '08:30', '10:00'),
+(23, CURRENT_DATE - 2, '10:00', '11:30'),
+(24, CURRENT_DATE - 2, '11:30', '13:00'),
+(25, CURRENT_DATE - 2, '13:00', '14:30'),
+(26, CURRENT_DATE - 2, '14:30', '16:00'),
+(27, CURRENT_DATE - 2, '16:00', '17:30'),
+(28, CURRENT_DATE - 2, '17:30', '19:00');
 
-  -- Insert Asistencia (~100 entries)
-  FOR i IN 1..100 LOOP
-    INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, ProfesorID, FechaRegistro, ManualInd)
-    VALUES (
-      ((i-1)%10)+1,
-      ((i-1)%20)+1,
-      ((i-1)%15)+1,
-      ((i-1)%10)+1,
-      NOW() - (random()* INTERVAL '7 days'),
-      (random() > 0.5)::INT
-    );
-  END LOOP;
+-- Insertar programación de clases
+INSERT INTO ProgramacionClases (ID, SeccionID, ModuloID, TipoSesion) VALUES
+(1, 1, 1, 1),
+(2, 1, 8, 1),
+(3, 1, 15, 1),
+(4, 1, 22, 1),
+(5, 2, 29, 1),
+(6, 2, 5, 1),
+(7, 2, 12, 1),
+(8, 2, 19, 1),
+(9, 3, 6, 1),
+(10, 3, 13, 1),
+(11, 3, 20, 1),
+(12, 3, 27, 1);
 
-  -- Insert MACs (~20 entries)
-  FOR i IN 1..10 LOOP
-    INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC)
-    VALUES (i*2-1, i, NOW() - INTERVAL '1 month', codigos_mac[i]),
-           (i*2, i, NOW() - INTERVAL '2 weeks', codigos_mac[i+2]);
-  END LOOP;
+-- Insertar inscripciones de alumnos en secciones
+INSERT INTO Inscripciones (ID, AlumnoID, SeccionID) VALUES
+(1, 1, 1),
+(2, 2, 1),
+(3, 3, 1),
+(4, 4, 1),
+(5, 5, 1),
+(6, 1, 2),
+(7, 2, 2),
+(8, 3, 2),
+(9, 4, 2),
+(10, 5, 2),
+(11, 1, 3),
+(12, 2, 3),
+(13, 3, 3),
+(14, 4, 3),
+(15, 5, 3);
+
+-- Insertar registros de asistencia
+INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, ProfesorID, FechaRegistro, ManualInd) VALUES
+(1, 1, 1, 1, 1, CURRENT_TIMESTAMP, 0),
+(2, 2, 1, 1, 1, CURRENT_TIMESTAMP, 0),
+(3, 3, 2, 3, 2, CURRENT_TIMESTAMP, 0);
+
+-- Insertar reportes de asistencia
+INSERT INTO ReporteAsistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, Estado) VALUES
+(1, 1, 1, 1, CURRENT_TIMESTAMP, 'Presente'),
+(2, 2, 1, 1, CURRENT_TIMESTAMP, 'Presente'),
+(3, 3, 2, 3, CURRENT_TIMESTAMP, 'Presente');
+
+-- Insertar registros de QR generados por profesores
+INSERT INTO QRGenerado (ID, ProfesorID, ModuloID, FechaRegistro, MAC) VALUES
+(1, 1, 1, CURRENT_TIMESTAMP, '00:1B:44:11:3A:B7'),
+(2, 2, 3, CURRENT_TIMESTAMP, '00:0D:3C:04:78:5B'),
+(3, 3, 5, CURRENT_TIMESTAMP, '00:1C:B3:08:76:21');
+
+-- Insertar registros de login
+INSERT INTO LogIn (ID, Rol, FechaRegistro, Rut, MAC) VALUES
+(1, 'profesor', CURRENT_TIMESTAMP, 12345678, '00:1B:44:11:3A:B7'),
+(2, 'alumno', CURRENT_TIMESTAMP, 11111111, '00:0D:3C:04:78:5B');
+
+-- Insertar usuarios en AUTH
+INSERT INTO AUTH (ID, "Username", Password, Rol, Rut) VALUES
+(1, 'jperez', 'hash_password_1', 'profesor', 12345678),
+(2, 'mgonzalez', 'hash_password_2', 'profesor', 23456789),
+(3, 'crodriguez', 'hash_password_3', 'profesor', 34567890),
+(4, 'amartinez', 'hash_password_4', 'alumno', 11111111),
+(5, 'psanchez', 'hash_password_5', 'alumno', 22222222);
+
+-- Insertar direcciones MAC de alumnos
+INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC) VALUES
+(1, 1, CURRENT_TIMESTAMP, '00:1B:44:11:3A:B7'),
+(2, 2, CURRENT_TIMESTAMP, '00:0D:3C:04:78:5B'),
+(3, 3, CURRENT_TIMESTAMP, '00:1C:B3:08:76:21');
+
+CREATE TABLE asistencia_1 PARTITION OF asistencia
+FOR VALUES IN (1);
+
+CREATE TABLE asistencia_2 PARTITION OF asistencia
+FOR VALUES IN (2);
+
+CREATE TABLE asistencia_3 PARTITION OF asistencia
+FOR VALUES IN (3);
+
+CREATE TABLE asistencia_4 PARTITION OF asistencia
+FOR VALUES IN (4);

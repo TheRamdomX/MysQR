@@ -1,7 +1,3 @@
-create table asistencia_1 PARTITION of asistencia
-for values from ("1") to ("1")
-
-
 -- Crear tablas
 CREATE TABLE IF NOT EXISTS Profesores (
     ID int  ,
@@ -191,3 +187,15 @@ INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC) VALUES
 (1, 1, CURRENT_TIMESTAMP, '00:1B:44:11:3A:B7'),
 (2, 2, CURRENT_TIMESTAMP, '00:0D:3C:04:78:5B'),
 (3, 3, CURRENT_TIMESTAMP, '00:1C:B3:08:76:21');
+
+CREATE TABLE asistencia_1 PARTITION OF asistencia
+FOR VALUES IN (1);
+
+CREATE TABLE asistencia_2 PARTITION OF asistencia
+FOR VALUES IN (2);
+
+CREATE TABLE asistencia_3 PARTITION OF asistencia
+FOR VALUES IN (3);
+
+CREATE TABLE asistencia_4 PARTITION OF asistencia
+FOR VALUES IN (4);
