@@ -179,3 +179,34 @@ func (s *DatabaseService) GetAttendanceReport(seccionID, alumnoID int) ([]models
 	}
 	return reports, nil
 }
+
+// 3.1 Obtener ModuloID actual y SeccionID de ProgramacionClases para un profesor
+func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.ModuloSeccion, error) {
+	// Primero obtenemos el módulo actual
+	moduleID, err := s.GetCurrentModuleID()
+	if err != nil {
+		return nil, fmt.Errorf("error getting current module: %w", err)
+	}
+
+	// Luego obtenemos la sección programada para este módulo y profesor
+	query := `
+		SELECT pc.SeccionID
+		FROM ProgramacionClases pc
+		WHERE pc.ProfesorID = $1 
+		AND pc.ModuloID = $2
+		AND pc.DiaSemana = EXTRACT(DOW FROM CURRENT_DATE)
+	`
+	var seccionID int
+	err = s.db.QueryRow(query, profesorID, moduleID).Scan(&seccionID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no hay clase programada para este módulo")
+		}
+		return nil, fmt.Errorf("error getting section: %w", err)
+	}
+
+	return &models.ModuloSeccion{
+		ModuloID:  moduleID,
+		SeccionID: seccionID,
+	}, nil
+}

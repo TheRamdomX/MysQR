@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/pkg/postgres"
 	"encoding/json"
+	"fmt"
 	"log"
 	"teacher/pkg/encryption"
 	"teacher/pkg/storage"
@@ -12,6 +14,15 @@ import (
 
 func main() {
 	r := gin.Default()
+
+	// Inicializar conexión a la base de datos
+	db, err := postgres.CreateConnection()
+	if err != nil {
+		log.Fatal("Error connecting to database:", err)
+	}
+	defer db.Close()
+
+	dbService := postgres.NewDatabaseService(db)
 
 	r.POST("/api/classes/:classId/start", func(c *gin.Context) {
 		classID := c.Param("classId")
@@ -67,6 +78,31 @@ func main() {
 		payload, _ := json.Marshal(event)
 		storage.PublishEvent(payload)
 		c.JSON(200, gin.H{"message": "QR generation stopped"})
+	})
+
+	// Nuevo endpoint para obtener módulo actual y sección
+	r.GET("/api/professor/:professorId/current-class", func(c *gin.Context) {
+		professorID := c.Param("professorId")
+		if professorID == "" {
+			c.JSON(400, gin.H{"error": "Missing professor ID"})
+			return
+		}
+
+		// Convertir professorID a int
+		profID := 0
+		if _, err := fmt.Sscanf(professorID, "%d", &profID); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid professor ID format"})
+			return
+		}
+
+		// Obtener módulo actual y sección
+		moduleSection, err := dbService.GetCurrentModuleAndSection(profID)
+		if err != nil {
+			c.JSON(404, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, moduleSection)
 	})
 
 	if err := r.Run(":8081"); err != nil {

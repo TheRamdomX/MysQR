@@ -68,3 +68,9 @@ type SeccionAsignatura struct {
 	AsignaturaID int    `json:"asignatura_id"`
 	Nombre       string `json:"nombre"`
 }
+
+// ModuloSeccion representa la combinación de un módulo actual y su sección correspondiente
+type ModuloSeccion struct {
+	ModuloID  int `json:"modulo_id"`
+	SeccionID int `json:"seccion_id"`
+}
