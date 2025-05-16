@@ -12,7 +12,7 @@ func main() {
 	r := gin.Default()
 
 	// Endpoint para generar QR
-	r.GET("/api/qr/generate", func(c *gin.Context) {
+	/* r.GET("/api/qr/generate", func(c *gin.Context) {
 		classID := c.Query("class_id")
 		professorID := c.Query("professor_id")
 		sectionID := c.Query("section_id")
@@ -31,7 +31,7 @@ func main() {
 
 		c.JSON(200, qrData)
 	})
-
+	*/
 	// Endpoint para validar QR
 	r.POST("/api/qr/validate", func(c *gin.Context) {
 		var request struct {
@@ -39,7 +39,7 @@ func main() {
 			ClassID     string `json:"class_id"`
 			ProfessorID string `json:"professor_id"`
 			SectionID   string `json:"section_id"`
-			ModuleID    string `json:"module_id"`
+			// ModuleID    string `json:"module_id"`
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
@@ -65,7 +65,7 @@ func main() {
 				"class_id":     request.ClassID,
 				"professor_id": request.ProfessorID,
 				"section_id":   request.SectionID,
-				"module_id":    request.ModuleID,
+				// "module_id":    request.ModuleID,
 			},
 		})
 	})
