@@ -1,15 +1,12 @@
 package qr_code
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"qr/pkg/encryption"
 	"qr/pkg/storage"
 	"qr/pkg/utils"
-	"qr/pkg/verification"
 	"sync"
 	"time"
 
@@ -20,26 +17,10 @@ import (
 var QRData = utils.QRData{}
 var activeClasses = sync.Map{}
 
-type QRGenerator struct {
-	db        *sql.DB
-	verifier  *verification.DBVerifier
-}
-
-func NewQRGenerator(db *sql.DB) *QRGenerator {
-	return &QRGenerator{
-		db:       db,
-		verifier: verification.NewDBVerifier(db),
-	}
-}
-
-func (g *QRGenerator) StartQRGeneration(ctx context.Context, classID, teacherID, moduleID string) error {
+func StartQRGeneration(classID string) {
 	if _, exists := activeClasses.Load(classID); exists {
-		return fmt.Errorf("QR generation already active for class: %s", classID)
-	}
-
-	// Perform pre-generation verifications
-	if err := g.verifier.PreQRGenerationVerification(ctx, teacherID, classID, moduleID); err != nil {
-		return fmt.Errorf("pre-generation verification failed: %w", err)
+		log.Printf("QR generation already active for class: %s", classID)
+		return
 	}
 
 	stopChan := make(chan struct{})
@@ -50,16 +31,12 @@ func (g *QRGenerator) StartQRGeneration(ctx context.Context, classID, teacherID,
 		ticker := time.NewTicker(1000 * time.Second) //reset of the qr code
 		defer ticker.Stop()
 
-		g.generateQRForClass(ctx, classID, teacherID, moduleID)
+		generateQRForClass(classID)
 
 		for {
 			select {
 			case <-ticker.C:
-				if err := g.verifier.PreQRGenerationVerification(ctx, teacherID, classID, moduleID); err != nil {
-					log.Printf("Verification failed for class %s: %v", classID, err)
-					continue
-				}
-				g.generateQRForClass(ctx, classID, teacherID, moduleID)
+				generateQRForClass(classID) // frontend may have to create a socket connection to get the qr code every x seconds ?
 			case <-stopChan:
 				activeClasses.Delete(classID)
 				log.Printf("QR generation stopped for class: %s", classID)
@@ -67,20 +44,17 @@ func (g *QRGenerator) StartQRGeneration(ctx context.Context, classID, teacherID,
 			}
 		}
 	}()
-
-	return nil
 }
 
-func (g *QRGenerator) StopQRGeneration(classID string) {
+func StopQRGeneration(classID string) {
 	if val, exists := activeClasses.Load(classID); exists {
 		close(val.(chan struct{}))
 	}
 }
 
-func (g *QRGenerator) generateQRForClass(ctx context.Context, classID, teacherID, moduleID string) {
+func generateQRForClass(classID string) {
 	qrData := utils.QRData{
 		Timestamp: time.Now().Unix(),
-		TeacherID: teacherID,
 		ClassID:   classID,
 		UUID:      utils.GenerateUUID(),
 	}
@@ -93,14 +67,6 @@ func (g *QRGenerator) generateQRForClass(ctx context.Context, classID, teacherID
 
 	if err := storage.StoreInRedis(qrData); err != nil {
 		log.Printf("Redis error: %v", err)
-	}
-
-	// Store QR generation record in database
-	_, err = g.db.ExecContext(ctx,
-		"INSERT INTO qr_generados (profesor_id, modulo_id, fecha_hora) VALUES ($1, $2, NOW())",
-		teacherID, moduleID)
-	if err != nil {
-		log.Printf("Database error storing QR generation: %v", err)
 	}
 
 	if err := generateQRImage(encrypted, qrData.UUID); err != nil {
