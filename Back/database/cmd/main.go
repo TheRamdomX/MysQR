@@ -53,7 +53,7 @@ func main() {
 	dbService := postgres.NewDatabaseService(db)
 
 	// 1. Obtener moduloID basado en la fecha y hora actual
-	http.HandleFunc("/module/current", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/db/module/current", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -67,8 +67,8 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]int{"module_id": moduleID})
 	})
 
-	// 2. Registro en QRGenerado con el ProfesorID -> No creo que sea necesario, recuerda que lo guardo en redis y podemos loggear con kafka  (lexo)
-	http.HandleFunc("/qr/generate", func(w http.ResponseWriter, r *http.Request) {
+	// 2. Registro en QRGenerado con el ProfesorID
+	http.HandleFunc("/api/db/qr/generate", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -91,13 +91,13 @@ func main() {
 	})
 
 	// 3. Obtener Secciones.ID y Asignaturas.Nombre usando el ProfesorID
-	http.HandleFunc("/sections/professor/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/db/sections/professor/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		idStr := strings.TrimPrefix(r.URL.Path, "/sections/professor/")
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/db/sections/professor/")
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			http.Error(w, "Invalid professor ID", http.StatusBadRequest)
@@ -112,8 +112,8 @@ func main() {
 		json.NewEncoder(w).Encode(sections)
 	})
 
-	// 4. Registro en Asistencia (QR) -> el microservicio de qr debe llamar a este endpoint para registrar la asistencia
-	http.HandleFunc("/attendance/qr", func(w http.ResponseWriter, r *http.Request) {
+	// 4. Registro en Asistencia (QR)
+	http.HandleFunc("/api/db/attendance/qr", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -135,8 +135,8 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// 4.1. Registro en Asistencia manual -> esto seria llamado por el microservicio de profesor para el registro manual de la asistencia
-	http.HandleFunc("/attendance/manual", func(w http.ResponseWriter, r *http.Request) {
+	// 4.1. Registro en Asistencia manual
+	http.HandleFunc("/api/db/attendance/manual", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -159,14 +159,14 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// 5. Obtener SeccionesID y nombre de asignaturas con el AlumnoId -> retorno de todas las secciones en las que el alumno esta inscrito
-	http.HandleFunc("/sections/student/", func(w http.ResponseWriter, r *http.Request) {
+	// 5. Obtener SeccionesID y nombre de asignaturas con el AlumnoId
+	http.HandleFunc("/api/db/sections/student/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		idStr := strings.TrimPrefix(r.URL.Path, "/sections/student/")
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/db/sections/student/")
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			http.Error(w, "Invalid student ID", http.StatusBadRequest)
@@ -182,7 +182,7 @@ func main() {
 	})
 
 	// 6. Obtener registros de ReporteAsistencia
-	http.HandleFunc("/attendance/report", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/db/attendance/report", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return

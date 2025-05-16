@@ -14,7 +14,7 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.POST("/scan", func(c *gin.Context) {
+	r.POST("/api/scan", func(c *gin.Context) {
 		var request struct {
 			EncryptedQR string `json:"encryptedQR"`
 			StudentID   string `json:"studentId"`

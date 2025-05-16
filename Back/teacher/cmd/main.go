@@ -12,7 +12,7 @@ import (
 func main() {
 	r := gin.Default()
 
-	r.POST("/classes/:classId/start", func(c *gin.Context) {
+	r.POST("/api/classes/:classId/start", func(c *gin.Context) {
 		classID := c.Param("classId")
 		event := map[string]string{
 			"event_type": "qr_start",
@@ -26,7 +26,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "start command sent"})
 	})
 
-	r.POST("/classes/:classId/stop", func(c *gin.Context) {
+	r.POST("/api/classes/:classId/stop", func(c *gin.Context) {
 		classID := c.Param("classId")
 		event := map[string]string{
 			"event_type": "qr_stop",
