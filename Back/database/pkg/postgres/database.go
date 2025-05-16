@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	dbHost     = "postgres"
+	dbHost     = "localhost"
 	dbPort     = 5432
 	dbUser     = "postgres"
 	dbPassword = "postgres"
@@ -118,12 +118,12 @@ func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID int) error {
 }
 
 // 4.1. Registro en Asistencia manual
-func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID int) error {
+func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID, ProfesorID int) error {
 	query := `
-		INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd)
-		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, true)
+		INSERT INTO Asistencia (AlumnoID, SeccionID, ProfesorID, ModuloID, FechaRegistro, ManualInd)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 1)
 	`
-	_, err := s.db.Exec(query, alumnoID, seccionID, moduloID)
+	_, err := s.db.Exec(query, alumnoID, seccionID, ProfesorID, moduloID)
 	return err
 }
 
@@ -157,10 +157,10 @@ func (s *DatabaseService) GetSectionsByStudent(alumnoID int) ([]models.SeccionAs
 // 6. Obtener registros de ReporteAsistencia
 func (s *DatabaseService) GetAttendanceReport(seccionID, alumnoID int) ([]models.ReporteAsistencia, error) {
 	query := `
-		SELECT ID, AlumnoID, SeccionID, Fecha, Estado
-		FROM ReporteAsistencia
+		SELECT a.nombre , s.FechaRegistro
+		FROM Asistencia s
+		join Alumnos a on a.ID = s.AlumnoID
 		WHERE SeccionID = $1 AND AlumnoID = $2
-		ORDER BY Fecha DESC
 	`
 	rows, err := s.db.Query(query, seccionID, alumnoID)
 	if err != nil {
@@ -171,7 +171,7 @@ func (s *DatabaseService) GetAttendanceReport(seccionID, alumnoID int) ([]models
 	var reports []models.ReporteAsistencia
 	for rows.Next() {
 		var report models.ReporteAsistencia
-		err := rows.Scan(&report.ID, &report.AlumnoID, &report.SeccionID, &report.Fecha, &report.Estado)
+		err := rows.Scan(&report.Nombre, &report.FechaRegistro)
 		if err != nil {
 			return nil, err
 		}

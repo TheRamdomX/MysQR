@@ -15,7 +15,7 @@ import (
 )
 
 func initDatabase(db *sql.DB) error {
-	sqlFile := "migrations/001_init.sql"
+	sqlFile := "migrations/002_init.sql"
 	content, err := os.ReadFile(sqlFile)
 	if err != nil {
 		return err
@@ -45,9 +45,9 @@ func main() {
 	defer db.Close()
 
 	// Initialize database
-	if err := initDatabase(db); err != nil {
+	/* if err := initDatabase(db); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
-	}
+	} */
 
 	// Create database service
 	dbService := postgres.NewDatabaseService(db)
@@ -143,16 +143,17 @@ func main() {
 		}
 
 		var request struct {
-			AlumnoID  int `json:"alumno_id"`
-			SeccionID int `json:"seccion_id"`
-			ModuloID  int `json:"modulo_id"`
+			ProfesorID int `json:"profesor_id"`
+			AlumnoID   int `json:"alumno_id"`
+			SeccionID  int `json:"seccion_id"`
+			ModuloID   int `json:"modulo_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		if err := dbService.RegisterManualAttendance(request.AlumnoID, request.SeccionID, request.ModuloID); err != nil {
+		if err := dbService.RegisterManualAttendance(request.AlumnoID, request.SeccionID, request.ModuloID, request.ProfesorID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

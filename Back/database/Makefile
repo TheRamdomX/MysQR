@@ -4,7 +4,7 @@ build:
 	go build -o database ./cmd/main.go
 
 run:
-	./database
+	go run ./cmd/main.go
 
 docker-build:
 	docker build -t database-service .

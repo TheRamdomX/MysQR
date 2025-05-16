@@ -56,11 +56,8 @@ type QRGenerado struct {
 }
 
 type ReporteAsistencia struct {
-	ID        int64     `json:"id"`
-	AlumnoID  int       `json:"alumno_id"`
-	SeccionID int       `json:"seccion_id"`
-	Fecha     time.Time `json:"fecha"`
-	Estado    string    `json:"estado"`
+	Nombre        string    `json:"nombre"`
+	FechaRegistro time.Time `json:"fecha"`
 }
 
 type SeccionAsignatura struct {
@@ -73,4 +70,12 @@ type SeccionAsignatura struct {
 type ModuloSeccion struct {
 	ModuloID  int `json:"modulo_id"`
 	SeccionID int `json:"seccion_id"`
+}
+
+type Asistencia struct {
+	ID            int       `json:"id"`
+	AlumnoID      int       `json:"alumno_id"`
+	SeccionID     int       `json:"seccion_id"`
+	FechaRegistro time.Time `json:"fecha_registro"`
+	Estado        string    `json:"estado"`
 }
