@@ -1,72 +1,76 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
-	"net/http"
-	"qr/pkg/auth"
-	"qr/pkg/database"
-	"qr/pkg/listeners"
-	"qr/pkg/qr_code"
+	"qr/pkg/storage"
+	"qr/pkg/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// Inicializar conexión a la base de datos
-	if err := database.InitDB(); err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
+	r := gin.Default()
 
-	// Iniciar listeners de eventos
-	go listeners.StartCommandListener()
-	go listeners.StartValidationListener()
+	// Endpoint para generar QR
+	r.GET("/api/qr/generate", func(c *gin.Context) {
+		classID := c.Query("class_id")
+		professorID := c.Query("professor_id")
+		sectionID := c.Query("section_id")
+		moduleID := c.Query("module_id")
 
-	// Endpoint de login
-	http.HandleFunc("/api/qr/login", auth.LoginHandler)
-
-	// Endpoint de generación de QR
-	http.HandleFunc("/api/qr/generate", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		if classID == "" || professorID == "" || sectionID == "" || moduleID == "" {
+			c.JSON(400, gin.H{"error": "Missing required parameters"})
 			return
 		}
 
-		// Validar token
-		token := r.Header.Get("Authorization")
-		if token == "" {
-			http.Error(w, "No token provided", http.StatusUnauthorized)
+		qrData := utils.NewQRData(classID, professorID, sectionID, moduleID)
+		if err := storage.StoreInRedis(qrData); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to store QR data"})
 			return
 		}
 
-		claims, err := auth.ValidateToken(token)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		// Verificar que sea un profesor
-		if claims.Role != "teacher" {
-			http.Error(w, "Only teachers can generate QR codes", http.StatusForbidden)
-			return
-		}
-
-		var request struct {
-			ClassID string `json:"class_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		metadata, err := qr_code.GenerateQRMetadata(request.ClassID)
-		if err != nil {
-			http.Error(w, "Failed to generate QR metadata", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(metadata)
+		c.JSON(200, qrData)
 	})
 
-	log.Println("Server started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Endpoint para validar QR
+	r.POST("/api/qr/validate", func(c *gin.Context) {
+		var request struct {
+			UUID        string `json:"uuid"`
+			ClassID     string `json:"class_id"`
+			ProfessorID string `json:"professor_id"`
+			SectionID   string `json:"section_id"`
+			ModuleID    string `json:"module_id"`
+		}
+
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		key := utils.GenerateRedisKey(request.ClassID, request.UUID)
+		exists, err := storage.ValidateQR(key)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Validation failed"})
+			return
+		}
+
+		if !exists {
+			c.JSON(404, gin.H{"error": "QR not found or expired"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"valid": true,
+			"data": gin.H{
+				"class_id":     request.ClassID,
+				"professor_id": request.ProfessorID,
+				"section_id":   request.SectionID,
+				"module_id":    request.ModuleID,
+			},
+		})
+	})
+
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

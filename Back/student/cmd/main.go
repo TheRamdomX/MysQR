@@ -1,68 +1,81 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"student/pkg/encryption"
 	"student/pkg/storage"
-	"time"
+	"student/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	r := gin.Default()
+
 	r.POST("/api/scan", func(c *gin.Context) {
 		var request struct {
-			EncryptedQR string `json:"encryptedQR"`
-			StudentID   string `json:"studentId"`
+			EncryptedQR string `json:"encryptedQR" binding:"required"`
+			StudentID   string `json:"studentID" binding:"required"`
+			ProfessorID string `json:"professorID" binding:"required"`
+			SectionID   string `json:"sectionID" binding:"required"`
+			ModuleID    string `json:"moduleID" binding:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
-			//logKafka("invalid_request", err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		// Decrypt QR data (scanned)
 		qrData, err := encryption.DecryptData(request.EncryptedQR)
-		log.Printf("QR Data: %v", qrData)
-		log.Printf("Encrypted: %v", request.EncryptedQR)
 		if err != nil {
-			//logKafka("decryption_failed", err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid QR"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al desencriptar QR"})
 			return
 		}
 
-		validationReq := map[string]string{
-			"uuid":      qrData.UUID,
-			"class_id":  qrData.ClassID,
-			"ScannTime": fmt.Sprintf("%d", time.Now().Unix()),
-			"studentId": request.StudentID,
+		// Validar que los datos del QR coincidan con los parámetros
+		if qrData.ProfessorID != request.ProfessorID ||
+			qrData.SectionID != request.SectionID ||
+			qrData.ModuleID != request.ModuleID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "QR inválido"})
+			return
 		}
 
-		payload, err := json.Marshal(validationReq)
+		// Verificar si el QR existe en Redis
+		key := utils.GenerateRedisKey(qrData.ClassID, qrData.UUID)
+		exists, err := storage.ValidateQR(key)
 		if err != nil {
-			//logKafka("marshal_failed", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process request"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar QR"})
 			return
 		}
 
-		if !storage.PublishEvent(payload) {
-			//logKafka("redis_publish_failed", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to submit validation"})
+		if !exists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "QR no encontrado o expirado"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "pending",
-			"message": "Validation request submitted",
-		})
+		// Publicar evento de validación exitosa
+		event := map[string]interface{}{
+			"type":        "validation",
+			"status":      "success",
+			"studentID":   request.StudentID,
+			"professorID": request.ProfessorID,
+			"sectionID":   request.SectionID,
+			"moduleID":    request.ModuleID,
+			"qrID":        qrData.UUID,
+		}
+
+		if err := storage.PublishEvent("qr_validations", event); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al publicar evento"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "QR validado exitosamente"})
 	})
 
-	r.Run(":8082")
+	if err := r.Run(":8082"); err != nil {
+		log.Fatal("Error al iniciar el servidor:", err)
+	}
 }
 
 /* func logKafka(eventType string, data interface{}) {

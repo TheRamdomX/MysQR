@@ -16,14 +16,26 @@ services:
     networks:
       - mysqr-network
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - mysqr-network
+
   student:
     build: ./student
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.student.rule=PathPrefix(`/api/scan`)"
       - "traefik.http.services.student.loadbalancer.server.port=8082"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     networks:
       - mysqr-network
+    depends_on:
+      - redis
 
   teacher:
     build: ./teacher
@@ -31,8 +43,13 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
       - "traefik.http.services.teacher.loadbalancer.server.port=8081"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     networks:
       - mysqr-network
+    depends_on:
+      - redis
 
   qr:
     build: ./qr
@@ -40,8 +57,13 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.qr.rule=PathPrefix(`/api/qr`)"
       - "traefik.http.services.qr.loadbalancer.server.port=8080"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     networks:
       - mysqr-network
+    depends_on:
+      - redis
 
   database:
     build: ./database

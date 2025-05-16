@@ -16,7 +16,7 @@ func GenerateQRMetadata(classID string) (*QRMetadata, error) {
 	metadata := &QRMetadata{
 		UUID:      generateUUID(),
 		ClassID:   classID,
-		ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+		ExpiresAt: time.Now().Add(100 * time.Minute).Unix(),
 	}
 
 	// Convertir a QRData para encriptación
