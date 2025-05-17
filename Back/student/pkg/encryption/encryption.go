@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mysqr/student/pkg/utils"
 	"os"
-	"student/pkg/utils"
 )
 
 var key = []byte(getEnv("ENCRYPTION_KEY", "mysqr-32-byte-secret-key-12345"))

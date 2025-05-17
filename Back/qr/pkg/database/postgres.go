@@ -9,15 +9,18 @@ import (
 )
 
 type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+	ID         int    `json:"id"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Role       string `json:"role"`
+	Rut        int    `json:"rut"`
+	ProfesorID *int   `json:"profesor_id,omitempty"`
+	AlumnoID   *int   `json:"alumno_id,omitempty"`
 }
 
 var db *sql.DB
 
-func InitDB() error {
+func CreateConnection() (*sql.DB, error) {
 	host := getEnv("DB_HOST", "database")
 	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "postgres")
@@ -30,10 +33,15 @@ func InitDB() error {
 	var err error
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return db.Ping()
+	err = db.Ping()
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func getEnv(key, defaultValue string) string {
@@ -44,27 +52,34 @@ func getEnv(key, defaultValue string) string {
 	return value
 }
 
-func ValidateUser(username, password string) (*User, error) {
+func ValidateUser(username, password, rol string) (*User, error) {
+	if db == nil {
+		return nil, fmt.Errorf("conexión a la base de datos no inicializada")
+	}
+
 	query := `
-		SELECT id, username, password, role 
-		FROM users 
-		WHERE username = $1 AND password = $2
+		SELECT id, username, password_hash, rol, rut, ProfesorID, AlumnoID
+		FROM AUTH 
+		WHERE username = $1 AND password_hash = $2 AND rol = $3
 	`
 
 	var user User
-	err := db.QueryRow(query, username, password).Scan(
+	err := db.QueryRow(query, username, password, rol).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Password,
 		&user.Role,
+		&user.Rut,
+		&user.ProfesorID,
+		&user.AlumnoID,
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, fmt.Errorf("credenciales inválidas")
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("database error: %v", err)
+		return nil, fmt.Errorf("error de base de datos: %v", err)
 	}
 
 	return &user, nil

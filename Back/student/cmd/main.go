@@ -2,10 +2,10 @@ package main
 
 import (
 	"log"
+	"mysqr/student/pkg/encryption"
+	"mysqr/student/pkg/storage"
+	"mysqr/student/pkg/utils"
 	"net/http"
-	"student/pkg/encryption"
-	"student/pkg/storage"
-	"student/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )

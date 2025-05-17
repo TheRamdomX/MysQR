@@ -1,29 +1,47 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const credenciales = [
-    { usuario: 'profesor', contrasena: 'prof123', tipo: 'profesor' },
-    { usuario: 'estudiante', contrasena: 'est123', tipo: 'estudiante' },
-];
+const API_URL = 'http://localhost:8080'; // Ajusta según tu configuración
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
     const router = useRouter();
 
-    const handleLogin = () => {
-        const user = credenciales.find(
-            c => c.usuario === usuario && c.contrasena === contrasena
-        );
-        if (user) {
-            if (user.tipo === 'profesor') {
+    const handleLogin = async () => {
+        try {
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: usuario,
+                    password: contrasena,
+                    rol: 'profesor'
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Guardar el token y la información del usuario
+                await AsyncStorage.setItem('userToken', data.token);
+                await AsyncStorage.setItem('userData', JSON.stringify({
+                    id: data.id,
+                    rol: data.rol,
+                    rut: data.rut,
+                    profesorId: data.profesor_id
+                }));
+                
                 router.push('/courses');
-            } else if (user.tipo === 'estudiante') {
-                router.push('/student-courses');
+            } else {
+                Alert.alert('Error', data.message || 'Credenciales incorrectas');
             }
-        } else {
-            alert('Credenciales incorrectas');
+        } catch (error) {
+            Alert.alert('Error', 'Error al conectar con el servidor');
         }
     };
 

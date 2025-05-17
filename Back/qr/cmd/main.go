@@ -2,8 +2,9 @@ package main
 
 import (
 	"log"
-	"qr/pkg/storage"
-	"qr/pkg/utils"
+	"mysqr/qr/pkg/auth"
+	"mysqr/qr/pkg/storage"
+	"mysqr/qr/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,27 +12,24 @@ import (
 func main() {
 	r := gin.Default()
 
-	// Endpoint para generar QR
-	/* r.GET("/api/qr/generate", func(c *gin.Context) {
-		classID := c.Query("class_id")
-		professorID := c.Query("professor_id")
-		sectionID := c.Query("section_id")
-		moduleID := c.Query("module_id")
+	// Configurar CORS
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
-		if classID == "" || professorID == "" || sectionID == "" || moduleID == "" {
-			c.JSON(400, gin.H{"error": "Missing required parameters"})
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
 			return
 		}
 
-		qrData := utils.NewQRData(classID, professorID, sectionID, moduleID)
-		if err := storage.StoreInRedis(qrData); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to store QR data"})
-			return
-		}
-
-		c.JSON(200, qrData)
+		c.Next()
 	})
-	*/
+
+	// Endpoint de login
+	r.POST("/login", auth.LoginHandler)
+
 	// Endpoint para validar QR
 	r.POST("/api/qr/validate", func(c *gin.Context) {
 		var request struct {
@@ -39,7 +37,6 @@ func main() {
 			ClassID     string `json:"class_id"`
 			ProfessorID string `json:"professor_id"`
 			SectionID   string `json:"section_id"`
-			// ModuleID    string `json:"module_id"`
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
@@ -65,7 +62,6 @@ func main() {
 				"class_id":     request.ClassID,
 				"professor_id": request.ProfessorID,
 				"section_id":   request.SectionID,
-				// "module_id":    request.ModuleID,
 			},
 		})
 	})

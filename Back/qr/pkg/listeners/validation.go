@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"qr/pkg/encryption"
+	"mysqr/qr/pkg/encryption"
 	"strconv"
 	"time"
 

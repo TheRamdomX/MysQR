@@ -1,14 +1,15 @@
-FROM golang:1.22 AS builder
-
+FROM golang:1.24 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
+COPY pkg ./pkg
+COPY cmd ./cmd
 RUN go mod download
-COPY . .
-
-RUN CGO_ENABLED=0 GOOS=linux go build -o database ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd/main.go
 
 FROM alpine:latest
 WORKDIR /app
-COPY --from=builder /app/database .
-COPY --from=builder /app/migrations ./migrations
-CMD ["./database"]
+RUN apk add --no-cache netcat-openbsd
+COPY --from=builder /app/app .
+COPY migrations ./migrations
+EXPOSE 8084
+CMD ["./app"]

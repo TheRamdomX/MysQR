@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"strings"
 
-	"database/pkg/postgres"
+	"mysqr/database/pkg/postgres"
 
 	_ "github.com/lib/pq"
 )
 
 func initDatabase(db *sql.DB) error {
-	sqlFile := "migrations/002_init.sql"
+	sqlFile := "migrations/001_init.sql"
 	content, err := os.ReadFile(sqlFile)
 	if err != nil {
 		return err

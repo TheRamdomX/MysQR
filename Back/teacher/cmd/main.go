@@ -1,13 +1,13 @@
 package main
 
 import (
-	"database/pkg/postgres"
 	"encoding/json"
 	"fmt"
 	"log"
-	"teacher/pkg/encryption"
-	"teacher/pkg/storage"
-	"teacher/pkg/utils"
+	"mysqr/database/pkg/postgres"
+	"mysqr/teacher/pkg/encryption"
+	"mysqr/teacher/pkg/storage"
+	"mysqr/teacher/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )

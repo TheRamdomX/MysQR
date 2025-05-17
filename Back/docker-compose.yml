@@ -1,6 +1,25 @@
 version: '3'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: asistencia_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mysqr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   traefik:
     image: traefik:v2.10
     command:
@@ -8,6 +27,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--providers.docker.network=mysqr-network"
     ports:
       - "80:80"
       - "8080:8080"
@@ -15,6 +35,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - mysqr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
@@ -22,9 +45,17 @@ services:
       - "6379:6379"
     networks:
       - mysqr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   student:
-    build: ./student
+    build:
+      context: .
+      dockerfile: student/Dockerfile
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.student.rule=PathPrefix(`/api/scan`)"
@@ -32,13 +63,34 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=asistencia_db
+      - DB_SSLMODE=disable
     networks:
       - mysqr-network
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        while ! nc -z postgres 5432; do
+          sleep 1
+        done &&
+        echo 'PostgreSQL started' &&
+        ./app
+      "
 
   teacher:
-    build: ./teacher
+    build:
+      context: .
+      dockerfile: teacher/Dockerfile
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
@@ -46,13 +98,34 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=asistencia_db
+      - DB_SSLMODE=disable
     networks:
       - mysqr-network
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        while ! nc -z postgres 5432; do
+          sleep 1
+        done &&
+        echo 'PostgreSQL started' &&
+        ./app
+      "
 
   qr:
-    build: ./qr
+    build:
+      context: .
+      dockerfile: qr/Dockerfile
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.qr.rule=PathPrefix(`/api/qr`)"
@@ -60,20 +133,65 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=asistencia_db
+      - DB_SSLMODE=disable
     networks:
       - mysqr-network
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        while ! nc -z postgres 5432; do
+          sleep 1
+        done &&
+        echo 'PostgreSQL started' &&
+        ./app
+      "
 
   database:
-    build: ./database
+    build:
+      context: ./database
+      dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.database.rule=PathPrefix(`/api/db`)"
       - "traefik.http.services.database.loadbalancer.server.port=8084"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=asistencia_db
+      - DB_SSLMODE=disable
     networks:
       - mysqr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        while ! nc -z postgres 5432; do
+          sleep 1
+        done &&
+        echo 'PostgreSQL started' &&
+        sleep 5 &&
+        ./app
+      "
 
 networks:
   mysqr-network:
-    driver: bridge 
+    driver: bridge
+
+volumes:
+  postgres_data: 

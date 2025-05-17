@@ -79,3 +79,10 @@ type Asistencia struct {
 	FechaRegistro time.Time `json:"fecha_registro"`
 	Estado        string    `json:"estado"`
 }
+
+type User struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Rol      string `json:"rol"`
+	Rut      int    `json:"rut"`
+}

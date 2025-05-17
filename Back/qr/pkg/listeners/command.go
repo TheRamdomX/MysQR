@@ -3,7 +3,7 @@ package listeners
 import (
 	"encoding/json"
 	"log"
-	"qr/pkg/qr_code"
+	"mysqr/qr/pkg/qr_code"
 	"time"
 )
 

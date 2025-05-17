@@ -1,16 +1,19 @@
-module qr
+module mysqr/qr
 
 go 1.23.0
 
 toolchain go1.24.2
 
 require (
+	mysqr/database v0.0.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/lib/pq v1.10.9
 	github.com/yeqown/go-qrcode/v2 v2.2.5
 	github.com/yeqown/go-qrcode/writer/standard v1.3.0
 )
+
+replace mysqr/database => ./database
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

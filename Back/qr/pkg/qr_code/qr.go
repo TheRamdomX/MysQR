@@ -3,10 +3,10 @@ package qr_code
 import (
 	"fmt"
 	"log"
+	"mysqr/qr/pkg/encryption"
+	"mysqr/qr/pkg/storage"
+	"mysqr/qr/pkg/utils"
 	"os"
-	"qr/pkg/encryption"
-	"qr/pkg/storage"
-	"qr/pkg/utils"
 	"sync"
 	"time"
 

@@ -1,4 +1,4 @@
-module database
+module mysqr/database
 
 go 1.22
 

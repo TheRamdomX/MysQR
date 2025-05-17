@@ -1,51 +1,61 @@
 package auth
 
 import (
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"net/http"
-	"qr/pkg/database"
 	"time"
 
+	"mysqr/qr/pkg/database"
+
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
-	secretKey = []byte("your-secret-key") // En producción, esto debería venir de variables de entorno
+	secretKey = []byte("mysqr-secret-key-2024") // En producción, esto debería venir de variables de entorno
 )
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Rol      string `json:"rol"`
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
-	Role  string `json:"role"`
-	ID    int    `json:"id"`
+	Token      string `json:"token"`
+	Rol        string `json:"rol"`
+	ID         int    `json:"id"`
+	Rut        int    `json:"rut"`
+	ProfesorID *int   `json:"profesor_id,omitempty"`
+	AlumnoID   *int   `json:"alumno_id,omitempty"`
 }
 
 type Claims struct {
-	UserID int    `json:"user_id"`
-	Role   string `json:"role"`
+	UserID     int    `json:"user_id"`
+	Rol        string `json:"rol"`
+	Rut        int    `json:"rut"`
+	ProfesorID *int   `json:"profesor_id,omitempty"`
+	AlumnoID   *int   `json:"alumno_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func ValidateLogin(username, password string) (*LoginResponse, error) {
-	// Validar credenciales contra la base de datos
-	user, err := database.ValidateUser(username, password)
+func ValidateLogin(username, password, rol string, db *sql.DB) (*LoginResponse, error) {
+	user, err := database.ValidateUser(username, password, rol)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generar token JWT
-	return generateToken(user.ID, user.Role)
+	return generateToken(user.ID, user.Role, user.Rut, user.ProfesorID, user.AlumnoID)
 }
 
-func generateToken(userID int, role string) (*LoginResponse, error) {
+func generateToken(userID int, rol string, rut int, profesorID, alumnoID *int) (*LoginResponse, error) {
 	claims := &Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:     userID,
+		Rol:        rol,
+		Rut:        rut,
+		ProfesorID: profesorID,
+		AlumnoID:   alumnoID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -59,9 +69,12 @@ func generateToken(userID int, role string) (*LoginResponse, error) {
 	}
 
 	return &LoginResponse{
-		Token: tokenString,
-		Role:  role,
-		ID:    userID,
+		Token:      tokenString,
+		Rol:        rol,
+		ID:         userID,
+		Rut:        rut,
+		ProfesorID: profesorID,
+		AlumnoID:   alumnoID,
 	}, nil
 }
 
@@ -76,30 +89,31 @@ func ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, errors.New("token inválido")
 	}
 
 	return claims, nil
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func LoginHandler(c *gin.Context) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la solicitud inválido"})
 		return
 	}
 
-	response, err := ValidateLogin(req.Username, req.Password)
+	db, err := database.CreateConnection()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error de conexión a la base de datos"})
+		return
+	}
+	defer db.Close()
+
+	response, err := ValidateLogin(req.Username, req.Password, req.Rol, db)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	c.JSON(http.StatusOK, response)
 }

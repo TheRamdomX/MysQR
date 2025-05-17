@@ -1,12 +1,15 @@
-module student
+module mysqr/student
 
 go 1.22.2
 
 require (
+	mysqr/database v0.0.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/segmentio/kafka-go v0.4.47
 )
+
+replace mysqr/database => ./database
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

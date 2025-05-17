@@ -48,23 +48,25 @@ CREATE TABLE IF NOT EXISTS Inscripciones (
 );
 
 CREATE TABLE IF NOT EXISTS Asistencia (
-    ID int  ,
+    ID int,
     AlumnoID int,
     SeccionID int,
     ModuloID int,
     ProfesorID int,
     FechaRegistro timestamp,
-    ManualInd boolean
-);
+    ManualInd boolean,
+    PRIMARY KEY (ID, SeccionID)
+) PARTITION BY RANGE (SeccionID);
 
 CREATE TABLE IF NOT EXISTS ReporteAsistencia (
-    ID int  ,
+    ID int,
     AlumnoID int,
     SeccionID int,
     ModuloID int,
     FechaRegistro timestamp,
-    Estado varchar
-);
+    Estado varchar,
+    PRIMARY KEY (ID, SeccionID)
+) PARTITION BY RANGE (SeccionID);
 
 CREATE TABLE IF NOT EXISTS QRGenerado (
     ID int  ,

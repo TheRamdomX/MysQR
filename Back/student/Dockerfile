@@ -1,13 +1,15 @@
 FROM golang:1.24 AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY student/go.mod student/go.sum ./
+COPY database ./database
+COPY student/pkg ./pkg
+COPY student/cmd ./cmd
 RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o student-service ./cmd/student-service
+RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd/main.go
 
 FROM alpine:latest
 WORKDIR /app
-COPY --from=builder /app/student-service .
-COPY --from=builder /app/.env .
+RUN apk add --no-cache netcat-openbsd
+COPY --from=builder /app/app .
 EXPOSE 8082
-CMD ["./student-service"]
+CMD ["./app"]

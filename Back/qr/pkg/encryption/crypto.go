@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"qr/pkg/utils"
+	"mysqr/qr/pkg/utils"
 )
 
 var encryptionKey = []byte("32-byte-long-secret-key-12345678")

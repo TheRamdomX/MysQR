@@ -1,29 +1,61 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const credenciales = [
-    { usuario: 'profesor', contrasena: 'prof123', tipo: 'profesor' },
-    { usuario: 'estudiante', contrasena: 'est123', tipo: 'estudiante' },
-];
+// Cambiamos localhost por la IP de tu computadora en la red local
+const API_URL = 'http://192.168.100.54:8080'; // Reemplaza con tu IP local
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
     const router = useRouter();
 
-    const handleLogin = () => {
-        const user = credenciales.find(
-            c => c.usuario === usuario && c.contrasena === contrasena
-        );
-        if (user) {
-            if (user.tipo === 'profesor') {
-                router.push('/courses');
-            } else if (user.tipo === 'estudiante') {
-                router.push('/student-courses');
+    const handleLogin = async () => {
+        try {
+            console.log('Intentando conectar a:', `${API_URL}/login`);
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: usuario,
+                    password: contrasena,
+                    rol: 'alumno'
+                }),
+            });
+
+            console.log('Status de la respuesta:', response.status);
+            const responseText = await response.text();
+            console.log('Respuesta del servidor:', responseText);
+
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error al parsear JSON:', parseError);
+                Alert.alert('Error', 'Respuesta inválida del servidor. Por favor, intente nuevamente.');
+                return;
             }
-        } else {
-            alert('Credenciales incorrectas');
+
+            if (response.ok) {
+                // Guardar el token y la información del usuario
+                await AsyncStorage.setItem('userToken', data.token);
+                await AsyncStorage.setItem('userData', JSON.stringify({
+                    id: data.id,
+                    rol: data.rol,
+                    rut: data.rut,
+                    alumnoId: data.alumno_id
+                }));
+                
+                router.push('/student-courses');
+            } else {
+                Alert.alert('Error', data.message || 'Credenciales incorrectas');
+            }
+        } catch (error) {
+            console.error('Error de login:', error);
+            Alert.alert('Error', 'Error al conectar con el servidor. Por favor, intente nuevamente.');
         }
     };
 

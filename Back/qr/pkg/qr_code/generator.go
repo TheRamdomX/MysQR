@@ -1,8 +1,8 @@
 package qr_code
 
 import (
-	"qr/pkg/encryption"
-	"qr/pkg/utils"
+	"mysqr/qr/pkg/encryption"
+	"mysqr/qr/pkg/utils"
 	"time"
 )
 

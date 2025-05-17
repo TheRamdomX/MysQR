@@ -1,16 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS pg_prewarm;
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-
-CREATE DATABASE asistencia_db;
-
-\c asistencia_db
-
-CREATE EXTENSION IF NOT EXISTS pg_prewarm;
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-
-ALTER SYSTEM SET shared_preload_libraries = 'pg_cron';
-SELECT pg_reload_conf();
-
 CREATE TABLE IF NOT EXISTS Profesores (
   ID int PRIMARY KEY,
   Rut int,
@@ -60,21 +47,23 @@ CREATE TABLE IF NOT EXISTS Inscripciones (
 );
 
 CREATE TABLE IF NOT EXISTS Asistencia (
-  ID bigserial PRIMARY KEY,
+  ID bigserial,
   AlumnoID int NOT NULL,
   SeccionID int NOT NULL,
   ModuloID int NOT NULL,
   ProfesorID int NOT NULL,
   FechaRegistro timestamp NOT NULL,
-  ManualInd int NOT NULL
+  ManualInd int NOT NULL,
+  PRIMARY KEY (ID, SeccionID)
 ) PARTITION BY RANGE (SeccionID);
 
 CREATE TABLE IF NOT EXISTS ReporteAsistencia (
-  ID bigserial PRIMARY KEY,
+  ID bigserial,
   AlumnoID int NOT NULL,
   SeccionID int NOT NULL,
   ModuloID int NOT NULL,
-  EstadoSesion varchar
+  EstadoSesion varchar,
+  PRIMARY KEY (ID, SeccionID)
 ) PARTITION BY RANGE (SeccionID);
 
 CREATE TABLE IF NOT EXISTS QRGenerado (
@@ -93,19 +82,25 @@ CREATE TABLE IF NOT EXISTS LogIn (
   MAC varchar
 );
 
-CREATE TABLE IF NOT EXISTS AUTH (
-  ID int PRIMARY KEY,
-  Username varchar,
-  Password varchar, -- GUARDAR CON HASH
-  Rol varchar,
-  Rut int 
-);
-
 CREATE TABLE IF NOT EXISTS MACs (
   ID int PRIMARY KEY,
   AlumnoID int,
   FechaRegistro timestamp,
   MAC varchar
+);
+
+CREATE TABLE IF NOT EXISTS AUTH (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    rol VARCHAR(20) NOT NULL,
+    ProfesorID int REFERENCES Profesores(ID),
+    AlumnoID int REFERENCES Alumnos(ID),
+    Rut int NOT NULL,
+    CONSTRAINT check_rol_id CHECK (
+        (rol = 'profesor' AND ProfesorID IS NOT NULL AND AlumnoID IS NULL) OR
+        (rol = 'alumno' AND AlumnoID IS NOT NULL AND ProfesorID IS NULL)
+    )
 );
 
 ALTER TABLE Secciones ADD FOREIGN KEY (AsignaturaID) REFERENCES Asignaturas(ID);
@@ -189,17 +184,17 @@ INSERT INTO Modulos (ID, Fecha, HoraInicio, HoraFin) VALUES
 -- Insertar programación de clases
 INSERT INTO ProgramacionClases (ID, SeccionID, ModuloID, TipoSesion) VALUES
 (1, 1, 1, 1),
-(2, 1, 8, 1),
-(3, 1, 15, 1),
-(4, 1, 22, 1),
-(5, 2, 29, 1),
-(6, 2, 5, 1),
-(7, 2, 12, 1),
-(8, 2, 19, 1),
-(9, 3, 6, 1),
-(10, 3, 13, 1),
-(11, 3, 20, 1),
-(12, 3, 27, 1);
+(2, 1, 2, 1),
+(3, 1, 3, 1),
+(4, 1, 4, 1),
+(5, 2, 5, 1),
+(6, 2, 6, 1),
+(7, 2, 7, 1),
+(8, 2, 8, 1),
+(9, 3, 9, 1),
+(10, 3, 10, 1),
+(11, 3, 11, 1),
+(12, 3, 12, 1);
 
 -- Insertar inscripciones de alumnos en secciones
 INSERT INTO Inscripciones (ID, AlumnoID, SeccionID) VALUES
@@ -226,10 +221,10 @@ INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, ProfesorID, FechaRegi
 (3, 3, 2, 3, 2, CURRENT_TIMESTAMP, 0);
 
 -- Insertar reportes de asistencia
-INSERT INTO ReporteAsistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, Estado) VALUES
-(1, 1, 1, 1, CURRENT_TIMESTAMP, 'Presente'),
-(2, 2, 1, 1, CURRENT_TIMESTAMP, 'Presente'),
-(3, 3, 2, 3, CURRENT_TIMESTAMP, 'Presente');
+INSERT INTO ReporteAsistencia (ID, AlumnoID, SeccionID, ModuloID, EstadoSesion) VALUES
+(1, 1, 1, 1, 'Presente'),
+(2, 2, 1, 1, 'Presente'),
+(3, 3, 2, 3, 'Presente');
 
 -- Insertar registros de QR generados por profesores
 INSERT INTO QRGenerado (ID, ProfesorID, ModuloID, FechaRegistro, MAC) VALUES

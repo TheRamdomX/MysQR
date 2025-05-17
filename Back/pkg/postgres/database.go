@@ -4,35 +4,17 @@ import (
 	"database/sql"
 	"fmt"
 	"mysqr/database/pkg/models"
-	"os"
-	"strconv"
 
 	_ "github.com/lib/pq"
 )
 
-var (
-	dbHost     = getEnv("DB_HOST", "localhost")
-	dbPort     = getEnvAsInt("DB_PORT", 5432)
-	dbUser     = getEnv("DB_USER", "postgres")
-	dbPassword = getEnv("DB_PASSWORD", "postgres")
-	dbName     = getEnv("DB_NAME", "asistencia_db")
+const (
+	dbHost     = "localhost"
+	dbPort     = 5432
+	dbUser     = "postgres"
+	dbPassword = "postgres"
+	dbName     = "asistencia_db"
 )
-
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
 
 type DatabaseService struct {
 	db *sql.DB
