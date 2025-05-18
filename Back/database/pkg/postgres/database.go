@@ -129,17 +129,12 @@ func (s *DatabaseService) GetSectionsByProfessor(profesorID int) ([]models.Secci
 }
 
 // 4. Registro en Asistencia (QR)
-func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID int) error {
-	moduleID, err := s.GetCurrentModuleID()
-	if err != nil {
-		return err
-	}
-
+func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID, moduloID int) error {
 	query := `
 		INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd)
 		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 0)
 	`
-	_, err = s.db.Exec(query, alumnoID, seccionID, moduleID)
+	_, err := s.db.Exec(query, alumnoID, seccionID, moduloID)
 	return err
 }
 
@@ -181,14 +176,11 @@ func (s *DatabaseService) GetSectionsByStudent(alumnoID int) ([]models.SeccionAs
 }
 
 // 6. Obtener registros de ReporteAsistencia
-func (s *DatabaseService) GetAttendanceReport(seccionID, alumnoID int) ([]models.ReporteAsistencia, error) {
+func (s *DatabaseService) GetAttendanceReport(seccionID int) ([]models.ReporteAsistencia, error) {
 	query := `
-		SELECT a.nombre , s.FechaRegistro
-		FROM Asistencia s
-		join Alumnos a on a.ID = s.AlumnoID
-		WHERE SeccionID = $1 AND AlumnoID = $2
+		SELECT * FROM obtener_asistencia_por_seccion($1);
 	`
-	rows, err := s.db.Query(query, seccionID, alumnoID)
+	rows, err := s.db.Query(query, seccionID)
 	if err != nil {
 		return nil, err
 	}

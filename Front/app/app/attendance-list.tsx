@@ -1,80 +1,72 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+const API_URL = 'http://192.168.100.54:8088';
+
 interface Attendance {
-  [key: string]: boolean;
+  [key: string]: string;
 }
 
 interface Student {
-  id: string;
-  name: string;
-  attendance: Attendance;
+  estudiante: string;
+  asistencia: Attendance;
 }
-
-const demoDates = [
-  '03-01', '03-08', '03-15', '03-22', '03-29',
-  '04-05', '04-12', '04-19', '04-26',
-  '05-03', '05-10', '05-17', '05-24', '05-31',
-  '06-07', '06-14', '06-21', '06-28'
-];
-
-const demoStudents: Student[] = [
-  { 
-    id: '1', 
-    name: 'Juan Pérez', 
-    attendance: { 
-      '03-01': true, '03-08': false, '03-15': true, '03-22': true, '03-29': false,
-      '04-05': true, '04-12': true, '04-19': false, '04-26': true,
-      '05-03': true, '05-10': false, '05-17': true, '05-24': true, '05-31': false,
-      '06-07': true, '06-14': true, '06-21': false, '06-28': true
-    } 
-  },
-  { 
-    id: '2', 
-    name: 'María García', 
-    attendance: { 
-      '03-01': true, '03-08': true, '03-15': true, '03-22': false, '03-29': true,
-      '04-05': true, '04-12': false, '04-19': true, '04-26': true,
-      '05-03': false, '05-10': true, '05-17': true, '05-24': false, '05-31': true,
-      '06-07': true, '06-14': false, '06-21': true, '06-28': true
-    } 
-  },
-  { 
-    id: '3', 
-    name: 'Carlos López', 
-    attendance: { 
-      '03-01': false, '03-08': true, '03-15': true, '03-22': true, '03-29': true,
-      '04-05': true, '04-12': true, '04-19': false, '04-26': true,
-      '05-03': true, '05-10': true, '05-17': false, '05-24': true, '05-31': true,
-      '06-07': false, '06-14': true, '06-21': true, '06-28': true
-    } 
-  },
-  { 
-    id: '4', 
-    name: 'Ana Martínez', 
-    attendance: { 
-      '03-01': true, '03-08': true, '03-15': false, '03-22': true, '03-29': true,
-      '04-05': false, '04-12': true, '04-19': true, '04-26': false,
-      '05-03': true, '05-10': true, '05-17': true, '05-24': false, '05-31': true,
-      '06-07': true, '06-14': false, '06-21': true, '06-28': true
-    } 
-  },
-  { 
-    id: '5', 
-    name: 'Pedro Sánchez', 
-    attendance: { 
-      '03-01': true, '03-08': false, '03-15': true, '03-22': false, '03-29': true,
-      '04-05': true, '04-12': true, '04-19': true, '04-26': false,
-      '05-03': false, '05-10': true, '05-17': true, '05-24': true, '05-31': false,
-      '06-07': true, '06-14': true, '06-21': false, '06-28': true
-    } 
-  },
-];
 
 export default function AttendanceList() {
   const router = useRouter();
   const { courseId } = useLocalSearchParams();
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dates, setDates] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchAttendanceData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_URL}/api/db/attendance/report?seccion_id=${courseId}`);
+        if (!response.ok) {
+          throw new Error('Error al cargar los datos de asistencia');
+        }
+        const data: Student[] = await response.json();
+        setStudents(data);
+
+        // Extraer todas las fechas únicas de las asistencias
+        const uniqueDates = new Set<string>();
+        data.forEach(student => {
+          Object.keys(student.asistencia).forEach(date => uniqueDates.add(date));
+        });
+        setDates(Array.from(uniqueDates).sort());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error desconocido');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAttendanceData();
+  }, [courseId]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8B0000" />
+        <Text style={styles.loadingText}>Cargando datos de asistencia...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.push('/courses')}>
+          <Text style={styles.retryButtonText}>Volver a intentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -97,7 +89,7 @@ export default function AttendanceList() {
               <View style={[styles.cell, styles.nameCell]}>
                 <Text style={styles.headerText}>Estudiante</Text>
               </View>
-              {demoDates.map((date) => (
+              {dates.map((date) => (
                 <View key={date} style={styles.cell}>
                   <Text style={styles.headerText}>{date}</Text>
                 </View>
@@ -105,19 +97,16 @@ export default function AttendanceList() {
             </View>
 
             <ScrollView>
-              {demoStudents.map((student) => (
-                <View key={student.id} style={styles.row}>
+              {students.map((student) => (
+                <View key={student.estudiante} style={styles.row}>
                   <View style={[styles.cell, styles.nameCell]}>
-                    <Text style={styles.studentName}>{student.name}</Text>
+                    <Text style={styles.studentName}>{student.estudiante}</Text>
                   </View>
-                  {demoDates.map((date) => (
+                  {dates.map((date) => (
                     <View key={date} style={styles.cell}>
-                      <View
-                        style={[
-                          styles.attendanceIndicator,
-                          student.attendance[date] ? styles.present : styles.absent,
-                        ]}
-                      />
+                      <Text style={styles.attendanceText}>
+                        {student.asistencia[date] || '❌'}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -189,16 +178,8 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 13,
   },
-  attendanceIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  present: {
-    backgroundColor: '#4CAF50',
-  },
-  absent: {
-    backgroundColor: '#F44336',
+  attendanceText: {
+    fontSize: 16,
   },
   backButton: {
     marginRight: 10,
@@ -212,5 +193,38 @@ const styles = StyleSheet.create({
     color: '#8B0000',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#8B0000',
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  errorText: {
+    color: '#8B0000',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#8B0000',
+    padding: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 }); 

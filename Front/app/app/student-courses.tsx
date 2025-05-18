@@ -104,11 +104,48 @@ export default function CoursesStudent() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
-    setScanned(true);
-    setScannedData(data);
-    setQrVisible(false);
-    console.log(`Bar code with type ${type} and data ${data} has been scanned!`);
+  const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    try {
+      setScanned(true);
+      setScannedData(data);
+      
+      // Parsear los datos del QR
+      const qrData = JSON.parse(data);
+      console.log('QR Data parsed:', qrData);
+
+      // Verificar que tenemos todos los datos necesarios
+      if (!qrData.moduloid || !qrData.seccionid) {
+        console.error('QR inválido: faltan datos necesarios');
+        return;
+      }
+
+      // Enviar datos al backend
+      const response = await fetch(`${API_URL}/api/db/attendance/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          alumno_id: userData?.alumnoId,
+          seccion_id: qrData.seccionid,
+          modulo_id: qrData.moduloid,
+          fecha_registro: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al registrar asistencia: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Asistencia registrada:', result);
+      
+      // Cerrar el modal después de un registro exitoso
+      setQrVisible(false);
+    } catch (error) {
+      console.error('Error al procesar el QR:', error);
+      // Aquí podrías mostrar un mensaje de error al usuario
+    }
   };
 
   const getNumColumns = () => {

@@ -35,12 +35,6 @@ interface SeccionAsignatura {
   nombre: string;
 }
 
-const initialCourses: Course[] = [
-  { id: '1', nombre: 'Matemáticas', cit: 'MAT101', estudiantes: 30, asistencia: ['Juan', 'Ana'] },
-  { id: '2', nombre: 'Historia', cit: 'HIS201', estudiantes: 25, asistencia: ['Pedro', 'Lucía'] },
-  { id: '3', nombre: 'Ciencias', cit: 'CIE301', estudiantes: 28, asistencia: ['Carlos', 'Sofía'] },
-];
-
 export default function Courses() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -126,14 +120,13 @@ export default function Courses() {
   };
 
   const qrData = {
-    id: userData?.id,
-    rol: userData?.rol,
-    rut: userData?.rut,
-    profesor_id: userData?.profesorId,
-    modulo_id: currentClass?.modulo_id,
-    seccion_id: currentClass?.seccion_id,
-    timestamp: new Date().toISOString()
+    profesorid: userData?.profesorId,
+    moduloid: currentClass?.modulo_id,
+    seccionid: currentClass?.seccion_id,
+    FechaRegistro :new Date().toISOString()
   };
+
+  console.log('QR Data being generated:', qrData);
 
   const addCourse = () => {
     if (nombre) {
@@ -195,12 +188,15 @@ export default function Courses() {
               <AntDesign name="close" size={35} color="#ffff" />
             </TouchableOpacity>
             {currentClass ? (
-              <QRCode 
-                value={JSON.stringify(qrData)}
-                size={650}
-                backgroundColor="white"
-                color="black"
-              />
+              <>
+                {console.log('Current Class Data:', currentClass)}
+                <QRCode 
+                  value={JSON.stringify(qrData)}
+                  size={650}
+                  backgroundColor="white"
+                  color="black"
+                />
+              </>
             ) : (
               <Text style={styles.errorText}>No hay clase programada en este momento</Text>
             )}

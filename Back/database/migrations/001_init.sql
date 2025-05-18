@@ -51,11 +51,10 @@ CREATE TABLE IF NOT EXISTS Asistencia (
   AlumnoID int NOT NULL,
   SeccionID int NOT NULL,
   ModuloID int NOT NULL,
-  ProfesorID int NOT NULL,
   FechaRegistro timestamp NOT NULL,
   ManualInd int NOT NULL,
   PRIMARY KEY (ID, SeccionID)
-) PARTITION BY RANGE (SeccionID);
+) PARTITION BY LIST (SeccionID);
 
 CREATE TABLE IF NOT EXISTS ReporteAsistencia (
   ID bigserial,
@@ -64,7 +63,7 @@ CREATE TABLE IF NOT EXISTS ReporteAsistencia (
   ModuloID int NOT NULL,
   EstadoSesion varchar,
   PRIMARY KEY (ID, SeccionID)
-) PARTITION BY RANGE (SeccionID);
+) PARTITION BY LIST (SeccionID);
 
 CREATE TABLE IF NOT EXISTS QRGenerado (
   ID int PRIMARY KEY,
@@ -215,16 +214,16 @@ INSERT INTO Inscripciones (ID, AlumnoID, SeccionID) VALUES
 (15, 5, 3);
 
 -- Insertar registros de asistencia
-INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, ProfesorID, FechaRegistro, ManualInd) VALUES
-(1, 1, 1, 1, 1, CURRENT_TIMESTAMP, 0),
-(2, 2, 1, 1, 1, CURRENT_TIMESTAMP, 0),
-(3, 3, 2, 3, 2, CURRENT_TIMESTAMP, 0);
+INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd) VALUES
+(1, 1, 1, 1, CURRENT_TIMESTAMP, 0),
+(2, 2, 1, 1, CURRENT_TIMESTAMP, 0),
+(3, 3, 3, 2, CURRENT_TIMESTAMP, 0);
 
 -- Insertar reportes de asistencia
 INSERT INTO ReporteAsistencia (ID, AlumnoID, SeccionID, ModuloID, EstadoSesion) VALUES
 (1, 1, 1, 1, 'Presente'),
-(2, 2, 1, 1, 'Presente'),
-(3, 3, 2, 3, 'Presente');
+(2, 1, 1, 1, 'Presente'),
+(3, 1, 1, 3, 'Presente');
 
 -- Insertar registros de QR generados por profesores
 INSERT INTO QRGenerado (ID, ProfesorID, ModuloID, FechaRegistro, MAC) VALUES
@@ -261,3 +260,59 @@ FOR VALUES IN (3);
 
 CREATE TABLE asistencia_4 PARTITION OF asistencia
 FOR VALUES IN (4);
+
+
+CREATE OR REPLACE FUNCTION obtener_asistencia_por_seccion(seccion_id_input INT)
+RETURNS JSONB AS $$
+DECLARE
+    reporte JSONB;
+BEGIN
+
+    -- paso 0: borrar registros de ReporteAsistencia para la seccion
+    DELETE FROM ReporteAsistencia WHERE SeccionID = seccion_id_input;
+
+    -- Paso 1: Insertar en ReporteAsistencia si falta registro para alguna clase programada
+    INSERT INTO ReporteAsistencia (AlumnoID, SeccionID, ModuloID, EstadoSesion)
+    SELECT 
+        i.AlumnoID,
+        seccion_id_input,
+        pc.ModuloID,
+        'ausente'
+    FROM Inscripciones i
+    JOIN ProgramacionClases pc ON pc.SeccionID = seccion_id_input
+    LEFT JOIN ReporteAsistencia ra ON ra.AlumnoID = i.AlumnoID 
+                                    AND ra.ModuloID = pc.ModuloID 
+                                    AND ra.SeccionID = seccion_id_input
+    WHERE i.SeccionID = seccion_id_input
+      AND ra.ID IS NULL;
+
+    -- Paso 2: Actualizar registros existentes en ReporteAsistencia según Asistencia real
+    UPDATE ReporteAsistencia ra
+    SET EstadoSesion = 'presente'
+    FROM Asistencia a
+    WHERE ra.AlumnoID = a.AlumnoID
+      AND ra.SeccionID = a.SeccionID
+      AND ra.ModuloID = a.ModuloID
+      AND ra.SeccionID = seccion_id_input;
+
+    -- Paso 3: Generar el JSON final agrupado
+    SELECT jsonb_agg(estudiante_data) INTO reporte
+    FROM (
+        SELECT 
+            a.Nombre || ' ' || a.Apellido AS estudiante,
+            jsonb_object_agg(to_char(m.Fecha, 'MM-DD'), 
+                             CASE 
+                                 WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
+                                 ELSE '🔴'
+                             END ORDER BY m.Fecha) AS asistencia
+        FROM ReporteAsistencia ra
+        JOIN Alumnos a ON a.ID = ra.AlumnoID
+        JOIN Modulos m ON m.ID = ra.ModuloID
+        WHERE ra.SeccionID = seccion_id_input
+        GROUP BY a.ID
+        ORDER BY a.Nombre, a.Apellido
+    ) AS estudiante_data;
+
+    RETURN reporte;
+END;
+$$ LANGUAGE plpgsql;

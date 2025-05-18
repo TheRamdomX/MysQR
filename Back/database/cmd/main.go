@@ -145,26 +145,29 @@ func main() {
 	})
 
 	// 4. Registro en Asistencia (QR)
-	http.HandleFunc("/api/db/attendance/qr", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/db/attendance/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		var request struct {
-			AlumnoID  int `json:"alumno_id"`
-			SeccionID int `json:"seccion_id"`
+			AlumnoID      int    `json:"alumno_id"`
+			SeccionID     int    `json:"seccion_id"`
+			ModuloID      int    `json:"modulo_id"`
+			FechaRegistro string `json:"fecha_registro"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		if err := dbService.RegisterAttendance(request.AlumnoID, request.SeccionID); err != nil {
+		if err := dbService.RegisterAttendance(request.AlumnoID, request.SeccionID, request.ModuloID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Asistencia registrada exitosamente"})
 	})
 
 	// 4.1. Registro en Asistencia manual
@@ -227,18 +230,19 @@ func main() {
 			return
 		}
 
-		alumnoID, err := strconv.Atoi(r.URL.Query().Get("alumno_id"))
+		// Ejecutar la función directamente
+		query := `SELECT * FROM obtener_asistencia_por_seccion($1)`
+		var reporte []byte
+		err = db.QueryRow(query, seccionID).Scan(&reporte)
 		if err != nil {
-			http.Error(w, "Invalid student ID", http.StatusBadRequest)
+			log.Printf("Error al obtener reporte de asistencia: %v", err)
+			http.Error(w, "Error al obtener reporte de asistencia", http.StatusInternalServerError)
 			return
 		}
 
-		reports, err := dbService.GetAttendanceReport(seccionID, alumnoID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		json.NewEncoder(w).Encode(reports)
+		// Establecer el tipo de contenido y enviar la respuesta
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(reporte)
 	})
 
 	log.Println("Server started on :8084")
