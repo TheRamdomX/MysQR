@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Cambiamos localhost por la IP de tu computadora en la red local
-const API_URL = 'http://192.168.100.54:8080'; // Reemplaza con tu IP local
+const API_URL = 'http://192.168.100.54:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
@@ -13,8 +13,8 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         try {
-            console.log('Intentando conectar a:', `${API_URL}/login`);
-            const response = await fetch(`${API_URL}/login`, {
+            console.log('Intentando conectar a:', `${API_URL}/api/qr/login`);
+            const response = await fetch(`${API_URL}/api/qr/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -51,7 +51,7 @@ export default function LoginScreen() {
                 
                 router.push('/student-courses');
             } else {
-                Alert.alert('Error', data.message || 'Credenciales incorrectas');
+                Alert.alert('Error', data.error || 'Credenciales incorrectas');
             }
         } catch (error) {
             console.error('Error de login:', error);

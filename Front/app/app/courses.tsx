@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 
 const isWeb = Platform.OS === 'web';
-
+const API_URL = 'http://192.168.100.54:8088';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface Course {
@@ -16,6 +17,24 @@ interface Course {
   asistencia: string[];
 }
 
+interface UserData {
+  id: string;
+  rol: string;
+  rut: string;
+  profesorId: string;
+}
+
+interface ModuleSection {
+  modulo_id: number;
+  seccion_id: number;
+}
+
+interface SeccionAsignatura {
+  seccion_id: number;
+  asignatura_id: number;
+  nombre: string;
+}
+
 const initialCourses: Course[] = [
   { id: '1', nombre: 'Matemáticas', cit: 'MAT101', estudiantes: 30, asistencia: ['Juan', 'Ana'] },
   { id: '2', nombre: 'Historia', cit: 'HIS201', estudiantes: 25, asistencia: ['Pedro', 'Lucía'] },
@@ -24,23 +43,100 @@ const initialCourses: Course[] = [
 
 export default function Courses() {
   const router = useRouter();
-  const [courses, setCourses] = useState(initialCourses);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [nombre, setNombre] = useState('');
   const [cit, setCit] = useState('');
   const [estudiantes, setEstudiantes] = useState('');
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
 
-  // Mock data for QR - replace with actual data in production
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedData = await AsyncStorage.getItem('userData');
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          setUserData(parsedData);
+          // Cargar datos de la clase actual
+          await loadCurrentClass(parsedData.profesorId);
+          // Cargar secciones del profesor
+          await loadProfessorSections(parsedData.profesorId);
+        }
+      } catch (error) {
+        console.error('Error al cargar datos del usuario:', error);
+      }
+    };
+    loadUserData();
+  }, []);
+
+  const loadProfessorSections = async (profesorId: string) => {
+    try {
+        const numId = parseInt(profesorId);
+        if (isNaN(numId)) {
+            console.error('ID de profesor inválido');
+            return;
+        }
+        console.log('Cargando secciones para profesor:', numId);
+        const response = await fetch(`${API_URL}/api/db/sections/professor/${numId}`);
+        console.log('Status de la respuesta:', response.status);
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${await response.text()}`);
+        }
+        const data: SeccionAsignatura[] = await response.json();
+        console.log('Datos de las secciones:', data);
+        const cursos = data.map(seccion => ({
+            id: seccion.seccion_id.toString(),
+            nombre: seccion.nombre,
+            cit: `CIT${seccion.asignatura_id}`,
+            estudiantes: 0,
+            asistencia: []
+        }));
+        
+        setCourses(cursos);
+    } catch (error) {
+        console.error('Error al cargar las secciones:', error);
+        // Mostrar mensaje de error al usuario
+    }
+};
+
+  const loadCurrentClass = async (profesorId: string) => {
+    try {
+      console.log('Consultando clase actual para profesor:', profesorId);
+      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${profesorId}`);
+      console.log('Status de la respuesta:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Datos de la clase actual:', data);
+        setCurrentClass(data);
+      } else if (response.status === 404) {
+        // No hay clase programada, lo cual es válido
+        console.log('No hay clase programada en este momento');
+        setCurrentClass(null);
+      } else {
+        const errorText = await response.text();
+        console.error('Error al cargar la clase actual:', errorText);
+      }
+    } catch (error) {
+      console.error('Error al cargar la clase actual:', error);
+      setCurrentClass(null);
+    }
+  };
+
   const qrData = {
-    id_profe: "PROF123",
-    id_seccion: "SEC456",
-    id_modulo: "MOD789",
+    id: userData?.id,
+    rol: userData?.rol,
+    rut: userData?.rut,
+    profesor_id: userData?.profesorId,
+    modulo_id: currentClass?.modulo_id,
+    seccion_id: currentClass?.seccion_id,
     timestamp: new Date().toISOString()
   };
 
   const addCourse = () => {
-    if (nombre && cit && estudiantes) {
+    if (nombre) {
       setCourses([
         ...courses,
         {
@@ -98,12 +194,16 @@ export default function Courses() {
             >
               <AntDesign name="close" size={35} color="#ffff" />
             </TouchableOpacity>
-            <QRCode 
-              value={JSON.stringify(qrData)}
-              size={650}
-              backgroundColor="white"
-              color="black"
-            />
+            {currentClass ? (
+              <QRCode 
+                value={JSON.stringify(qrData)}
+                size={650}
+                backgroundColor="white"
+                color="black"
+              />
+            ) : (
+              <Text style={styles.errorText}>No hay clase programada en este momento</Text>
+            )}
           </View>
         </View>
       </Modal>  
@@ -285,5 +385,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
+  },
+  errorText: {
+    color: '#8B0000',
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 20,
   },
 }); 

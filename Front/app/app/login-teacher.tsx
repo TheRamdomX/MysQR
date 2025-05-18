@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Alert } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://localhost:8080'; // Ajusta según tu configuración
+// Cambiamos localhost por la IP de tu computadora en la red local
+const API_URL = 'http://192.168.100.54:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
@@ -12,7 +13,8 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         try {
-            const response = await fetch(`${API_URL}/login`, {
+            console.log('Intentando conectar a:', `${API_URL}/api/qr/login`);
+            const response = await fetch(`${API_URL}/api/qr/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -24,7 +26,18 @@ export default function LoginScreen() {
                 }),
             });
 
-            const data = await response.json();
+            console.log('Status de la respuesta:', response.status);
+            const responseText = await response.text();
+            console.log('Respuesta del servidor:', responseText);
+
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error al parsear JSON:', parseError);
+                Alert.alert('Error', 'Respuesta inválida del servidor. Por favor, intente nuevamente.');
+                return;
+            }
 
             if (response.ok) {
                 // Guardar el token y la información del usuario
@@ -38,10 +51,11 @@ export default function LoginScreen() {
                 
                 router.push('/courses');
             } else {
-                Alert.alert('Error', data.message || 'Credenciales incorrectas');
+                Alert.alert('Error', data.error || 'Credenciales incorrectas');
             }
         } catch (error) {
-            Alert.alert('Error', 'Error al conectar con el servidor');
+            console.error('Error de login:', error);
+            Alert.alert('Error', 'Error al conectar con el servidor. Por favor, intente nuevamente.');
         }
     };
 
@@ -90,7 +104,7 @@ const styles = StyleSheet.create({
     },
     container: { flex:1, justifyContent:'center', alignItems:'center' },
     card: {
-        width: '35%',
+        width: Platform.OS === 'web' ? '50%' : '100%',
         backgroundColor: '#ffffff',
         borderRadius: 12,
         padding: 24,

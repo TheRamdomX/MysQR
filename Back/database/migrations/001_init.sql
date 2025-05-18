@@ -238,12 +238,11 @@ INSERT INTO LogIn (ID, Rol, FechaRegistro, Rut, MAC) VALUES
 (2, 'alumno', CURRENT_TIMESTAMP, 11111111, '00:0D:3C:04:78:5B');
 
 -- Insertar usuarios en AUTH
-INSERT INTO AUTH (ID, "Username", Password, Rol, Rut) VALUES
-(1, 'jperez', 'hash_password_1', 'profesor', 12345678),
-(2, 'mgonzalez', 'hash_password_2', 'profesor', 23456789),
-(3, 'crodriguez', 'hash_password_3', 'profesor', 34567890),
-(4, 'amartinez', 'hash_password_4', 'alumno', 11111111),
-(5, 'psanchez', 'hash_password_5', 'alumno', 22222222);
+INSERT INTO AUTH (username, password_hash, rol, ProfesorID, AlumnoID, Rut)
+VALUES ('profesor1', 'password', 'profesor', 1, NULL, 11111111),
+       ('profesor2', 'password', 'profesor', 2, NULL, 22222222),
+       ('alumno1', 'password', 'alumno', NULL, 1, 33333333),
+       ('alumno2', 'password', 'alumno', NULL, 2, 44444444);
 
 -- Insertar direcciones MAC de alumnos
 INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC) VALUES

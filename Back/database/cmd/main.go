@@ -11,6 +11,7 @@ import (
 
 	"mysqr/database/pkg/postgres"
 
+	"github.com/gorilla/handlers"
 	_ "github.com/lib/pq"
 )
 
@@ -114,6 +115,35 @@ func main() {
 		json.NewEncoder(w).Encode(sections)
 	})
 
+	// 3.1 Obtener ModuloID actual y SeccionID de ProgramacionClases para un profesor
+	http.HandleFunc("/api/db/professor/current-class", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		profesorID, err := strconv.Atoi(r.URL.Query().Get("profesor_id"))
+		if err != nil {
+			http.Error(w, "Invalid professor ID", http.StatusBadRequest)
+			return
+		}
+
+		moduleSection, err := dbService.GetCurrentModuleAndSection(profesorID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Si no hay clase programada, devolvemos un objeto vacío con status 200
+		if moduleSection == nil {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{})
+			return
+		}
+
+		json.NewEncoder(w).Encode(moduleSection)
+	})
+
 	// 4. Registro en Asistencia (QR)
 	http.HandleFunc("/api/db/attendance/qr", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -211,6 +241,11 @@ func main() {
 		json.NewEncoder(w).Encode(reports)
 	})
 
-	log.Println("Server started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Server started on :8084")
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+	)
+	log.Fatal(http.ListenAndServe(":8084", corsHandler(http.DefaultServeMux)))
 }

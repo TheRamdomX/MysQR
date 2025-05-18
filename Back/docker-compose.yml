@@ -178,8 +178,11 @@ services:
       dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
+      - "traefik.http.routers.database.entrypoints=websecure"
       - "traefik.http.routers.database.rule=PathPrefix(`/api/db`)"
       - "traefik.http.services.database.loadbalancer.server.port=8084"
+    ports:
+      - "8084:8084"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432

@@ -4,24 +4,86 @@ import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
+const API_URL = 'http://192.168.100.54:8088';
 
-const initialCourses = [
-  { id: '1', nombre: 'Matemáticas', cit: 'MAT101', asistencia: [true, false, true, true, false, true, true, false, true] },
-  { id: '2', nombre: 'Historia', cit: 'HIS201', asistencia: [true, true, false, true, true, false, true, false, true] },
-  { id: '3', nombre: 'Ciencias', cit: 'CIE301', asistencia: [false, true, true, true, false, false, true, true, true] },
-];
+interface Course {
+  id: string;
+  nombre: string;
+  cit: string;
+  asistencia: boolean[];
+}
+
+interface UserData {
+  id: string;
+  rol: string;
+  rut: string;
+  alumnoId: string;
+}
+
+interface SeccionAsignatura {
+  seccion_id: number;
+  asignatura_id: number;
+  nombre: string;
+}
 
 export default function CoursesStudent() {
   const router = useRouter();
-  const [courses] = useState(initialCourses);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
   const [hora, setHora] = useState('');
   const [scanned, setScanned] = useState(false);
   const [scannedData, setScannedData] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
+  const [userData, setUserData] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedData = await AsyncStorage.getItem('userData');
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          setUserData(parsedData);
+          // Cargar secciones del alumno
+          await loadStudentSections(parsedData.alumnoId);
+        }
+      } catch (error) {
+        console.error('Error al cargar datos del usuario:', error);
+      }
+    };
+    loadUserData();
+  }, []);
+
+  const loadStudentSections = async (alumnoId: string) => {
+    try {
+      const numId = parseInt(alumnoId);
+      if (isNaN(numId)) {
+        console.error('ID de alumno inválido');
+        return;
+      }
+      console.log('Cargando secciones para alumno:', numId);
+      const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
+      console.log('Status de la respuesta:', response.status);
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${await response.text()}`);
+      }
+      const data: SeccionAsignatura[] = await response.json();
+      console.log('Datos de las secciones:', data);
+      const cursos = data.map(seccion => ({
+        id: seccion.seccion_id.toString(),
+        nombre: seccion.nombre,
+        cit: `CIT${seccion.asignatura_id}`,
+        asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
+      }));
+      
+      setCourses(cursos);
+    } catch (error) {
+      console.error('Error al cargar las secciones:', error);
+    }
+  };
 
   useEffect(() => {
     if (permission && !permission.granted) {
@@ -42,7 +104,7 @@ export default function CoursesStudent() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }) => {
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
     setScanned(true);
     setScannedData(data);
     setQrVisible(false);
@@ -55,12 +117,12 @@ export default function CoursesStudent() {
       if (SCREEN_WIDTH < 900) return 2;
       return 3;
     }
-    return 1; // Always single column on mobile
+    return 1;
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: { item: Course }) => {
     const total = item.asistencia.length;
-    const asistencias = item.asistencia.filter(a => a).length;
+    const asistencias = item.asistencia.filter((a: boolean) => a).length;
     const percent = total > 0 ? Math.round((asistencias / total) * 100) : 0;
     return (
       <View style={styles.card}>

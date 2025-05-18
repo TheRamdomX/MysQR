@@ -211,6 +211,9 @@ func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.Mo
 	// Primero obtenemos el módulo actual
 	moduleID, err := s.GetCurrentModuleID()
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No hay módulo actual, lo cual es válido
+		}
 		return nil, fmt.Errorf("error getting current module: %w", err)
 	}
 
@@ -218,14 +221,14 @@ func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.Mo
 	query := `
 		SELECT pc.SeccionID
 		FROM ProgramacionClases pc
-		WHERE pc.ProfesorID = $1 
-		AND pc.ModuloID = $2
+		JOIN Secciones s ON pc.SeccionID = s.ID
+		WHERE pc.ModuloID = $1 AND s.ProfesorID = $2;
 	`
 	var seccionID int
-	err = s.db.QueryRow(query, profesorID, moduleID).Scan(&seccionID)
+	err = s.db.QueryRow(query, moduleID, profesorID).Scan(&seccionID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("no hay clase programada para este módulo")
+			return nil, nil // No hay clase programada, lo cual es válido
 		}
 		return nil, fmt.Errorf("error getting section: %w", err)
 	}
