@@ -27,12 +27,18 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:8088"
       - "--providers.docker.network=mysqr-network"
+      - "--log.level=DEBUG"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.format=json"
     ports:
       - "80:80"
-      - "8080:8080"
+      - "8088:8088"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/logs:/var/log/traefik
     networks:
       - mysqr-network
     depends_on:
@@ -59,7 +65,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.student.rule=PathPrefix(`/api/scan`)"
-      - "traefik.http.services.student.loadbalancer.server.port=8082"
+      - "traefik.http.services.student.loadbalancer.server.port=8085"
+    ports:
+      - "8085:8085"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -94,7 +102,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
-      - "traefik.http.services.teacher.loadbalancer.server.port=8081"
+      - "traefik.http.services.teacher.loadbalancer.server.port=8086"
+    ports:
+      - "8086:8086"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -128,8 +138,13 @@ services:
       dockerfile: qr/Dockerfile
     labels:
       - "traefik.enable=true"
+      - "traefik.http.routers.qr.entrypoints=websecure"
       - "traefik.http.routers.qr.rule=PathPrefix(`/api/qr`)"
-      - "traefik.http.services.qr.loadbalancer.server.port=8080"
+      - "traefik.http.services.qr.loadbalancer.server.port=8087"
+      - "traefik.http.middlewares.qr-strip.stripprefix.prefixes=/api/qr"
+      - "traefik.http.routers.qr.middlewares=qr-strip"
+    ports:
+      - "8087:8087"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379

@@ -105,7 +105,8 @@ func main() {
 		c.JSON(200, moduleSection)
 	})
 
-	if err := r.Run(":8081"); err != nil {
+	log.Printf("Iniciando servidor Teacher en :8086")
+	if err := r.Run(":8086"); err != nil {
 		log.Fatal(err)
 	}
 }

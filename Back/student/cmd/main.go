@@ -73,8 +73,9 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "QR validado exitosamente"})
 	})
 
-	if err := r.Run(":8082"); err != nil {
-		log.Fatal("Error al iniciar el servidor:", err)
+	log.Printf("Iniciando servidor Student en :8085")
+	if err := r.Run(":8085"); err != nil {
+		log.Fatal(err)
 	}
 }
 

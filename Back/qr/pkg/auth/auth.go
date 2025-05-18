@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -98,12 +99,16 @@ func ValidateToken(tokenString string) (*Claims, error) {
 func LoginHandler(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Error al parsear JSON: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la solicitud inválido"})
 		return
 	}
 
+	log.Printf("Intento de login - Usuario: %s, Rol: %s", req.Username, req.Rol)
+
 	db, err := database.CreateConnection()
 	if err != nil {
+		log.Printf("Error de conexión a la base de datos: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error de conexión a la base de datos"})
 		return
 	}
@@ -111,9 +116,11 @@ func LoginHandler(c *gin.Context) {
 
 	response, err := ValidateLogin(req.Username, req.Password, req.Rol, db)
 	if err != nil {
+		log.Printf("Error de validación: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("Login exitoso para usuario: %s", req.Username)
 	c.JSON(http.StatusOK, response)
 }
