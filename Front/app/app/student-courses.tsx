@@ -158,14 +158,10 @@ export default function CoursesStudent() {
   };
 
   const renderItem = ({ item }: { item: Course }) => {
-    const total = item.asistencia.length;
-    const asistencias = item.asistencia.filter((a: boolean) => a).length;
-    const percent = total > 0 ? Math.round((asistencias / total) * 100) : 0;
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{item.nombre}</Text>
         <Text style={styles.text}>CIT: {item.cit}</Text>
-        <Text style={styles.text}>{percent}% asistencia</Text>
         <TouchableOpacity
           style={styles.attendanceButton}
           onPress={() => router.push(`/attendance-list-student?courseId=${item.id}`)}

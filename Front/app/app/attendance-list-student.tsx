@@ -1,40 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
+const API_URL = 'http://192.168.100.54:8088';
 
-const demoStudent = {
-  nombre: 'Juan Pérez',
-  asistencia: [1, 1, 0, 1, 0, 1, 1, 0, 1],
-};
+interface Attendance {
+  [key: string]: string;
+}
 
-const demoCourse = { nombre: 'Sistemas Operativos - Sección 4' };
+interface StudentAttendance {
+  estudiante: string;
+  asistencia: Attendance;
+}
 
-const TOTAL_CLASSES = 20;
-const START_DATE = new Date(2024, 2, 4); // March 4, 2024 (Monday)
-
-function getClassDates(count: number) {
-  const dates = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(START_DATE);
-    d.setDate(d.getDate() + i * 7);
-    dates.push(d);
-  }
-  return dates;
+interface UserData {
+  id: string;
+  rol: string;
+  rut: string;
+  alumnoId: string;
 }
 
 export default function AttendanceListStudent() {
   const router = useRouter();
   const { courseId } = useLocalSearchParams();
   const [hora, setHora] = useState('');
-  const student = demoStudent;
-  const course = demoCourse;
-  const totalClases = TOTAL_CLASSES;
-  const asistencias = student.asistencia.filter(a => a === 1).length;
-  const faltas = student.asistencia.filter(a => a === 0).length;
-  const porcentaje = student.asistencia.length > 0 ? Math.round((asistencias / student.asistencia.length) * 100) : 0;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [studentData, setStudentData] = useState<StudentAttendance | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [dates, setDates] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedData = await AsyncStorage.getItem('userData');
+        console.log('Debug - Stored user data:', storedData);
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          console.log('Debug - Parsed user data:', parsedData);
+          setUserData(parsedData);
+        } else {
+          console.log('Debug - No user data found in AsyncStorage');
+          setError('No se encontraron datos del usuario');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error al cargar datos del usuario:', error);
+        setError('Error al cargar datos del usuario');
+        setLoading(false);
+      }
+    };
+    loadUserData();
+  }, []);
+
+  useEffect(() => {
+    if (!courseId) {
+      console.log('Debug - No courseId provided');
+      setError('Falta el ID del curso');
+      setLoading(false);
+      return;
+    }
+
+    if (!userData) {
+      console.log('Debug - No userData available yet');
+      return; // Esperar a que userData esté disponible
+    }
+
+    if (!userData.alumnoId) {
+      console.log('Debug - No alumnoId in userData');
+      setError('No se encontró el ID del alumno');
+      setLoading(false);
+      return;
+    }
+
+    const fetchStudentAttendance = async () => {
+      try {
+        setLoading(true);
+        console.log('Debug - Starting fetch with:', {
+          courseId,
+          alumnoId: userData.alumnoId
+        });
+        
+        const url = `${API_URL}/api/db/attendance/student?seccion_id=${courseId}&alumno_id=${userData.alumnoId}`;
+        console.log('Debug - Fetching URL:', url);
+        
+        const response = await fetch(url);
+        console.log('Debug - Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('Debug - Error response:', errorText);
+          throw new Error(`Error al cargar los datos de asistencia: ${response.status} - ${errorText}`);
+        }
+        
+        const data: StudentAttendance = await response.json();
+        console.log('Debug - Response data:', data);
+        
+        if (!data || !data.estudiante || !data.asistencia) {
+          throw new Error('Los datos recibidos no tienen el formato esperado');
+        }
+        setStudentData(data);
+
+        // Extraer todas las fechas únicas de las asistencias
+        const uniqueDates = Object.keys(data.asistencia).sort();
+        setDates(uniqueDates);
+      } catch (err) {
+        console.error('Error completo:', err);
+        setError(err instanceof Error ? err.message : 'Error desconocido');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudentAttendance();
+  }, [courseId, userData]);
 
   useEffect(() => {
     const actualizarHora = () => {
@@ -49,17 +131,52 @@ export default function AttendanceListStudent() {
     return () => clearInterval(timer);
   }, []);
 
-  const attendanceArray = [
-    ...student.asistencia,
-    ...Array(TOTAL_CLASSES - student.asistencia.length).fill(null)
-  ];
-  const classDates = getClassDates(TOTAL_CLASSES);
+  if (!courseId || !userData?.alumnoId) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Error: Faltan parámetros necesarios</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-  const getCirclesPerRow = () => {
-    if (SCREEN_WIDTH < 600) return 4;
-    if (SCREEN_WIDTH < 900) return 6;
-    return 8;
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8B0000" />
+        <Text style={styles.loadingText}>Cargando datos de asistencia...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!studentData) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>No se encontraron datos del estudiante</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const asistencias = Object.values(studentData.asistencia).filter(a => a === '🟢').length;
+  const faltas = Object.values(studentData.asistencia).filter(a => a === '🔴').length;
+  const totalClases = Object.keys(studentData.asistencia).length;
+  const porcentaje = totalClases > 0 ? Math.round((asistencias / totalClases) * 100) : 0;
 
   return (
     <View style={styles.mainContainer}>
@@ -80,28 +197,24 @@ export default function AttendanceListStudent() {
       </View>
       <View style={styles.container}>
         <View style={styles.summaryBox}>
-          <Text style={styles.studentName}>{course.nombre}</Text>
+          <Text style={styles.studentName}>{studentData.estudiante}</Text>
           <Text style={styles.percent}>{porcentaje}% asistencia</Text>
           <Text style={styles.stats}>{asistencias} asistencias, {faltas} faltas</Text>
           <Text style={styles.stats}>{totalClases} clases en total</Text>
-          <View style={[styles.circlesRow, { justifyContent: 'flex-start' }]}>
-            {attendanceArray.map((asistio, idx) => {
-              let label;
-              if (asistio === 1 || asistio === 0) {
-                const d = classDates[idx];
-                label = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
-              } else {
-                label = '**/**';
-              }
-              return (
-                <View key={idx} style={styles.circleCol}>
-                  <Text style={styles.dateLabel}>{label}</Text>
-                  <View
-                    style={[styles.circle, asistio === 1 ? styles.attended : (asistio === 0 ? styles.notAttended : styles.future)]}
-                  />
-                </View>
-              );
-            })}
+          <View style={styles.attendanceTable}>
+            <View style={styles.tableHeader}>
+              <Text style={styles.headerText}>Fecha</Text>
+              <Text style={styles.headerText}>Estado</Text>
+            </View>
+            {dates.map((fecha, idx) => (
+              <View key={idx} style={styles.tableRow}>
+                <Text style={styles.dateText}>{fecha}</Text>
+                <View style={[
+                  styles.statusCircle,
+                  studentData.asistencia[fecha] === '🟢' ? styles.attended : styles.notAttended
+                ]} />
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -195,41 +308,45 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textAlign: 'center',
   },
-  circlesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  attendanceTable: {
+    width: '100%',
     marginTop: 20,
-    justifyContent: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  circleCol: {
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#8B0000',
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    margin: SCREEN_WIDTH * 0.01,
-    width: isWeb ? 60 : 40,
   },
-  dateLabel: {
-    fontSize: isWeb ? 14 : 12,
-    color: '#666',
-    marginBottom: 4,
+  dateText: {
+    fontSize: isWeb ? 16 : 14,
+    color: '#333',
   },
-  circle: {
-    width: isWeb ? 36 : 28,
-    height: isWeb ? 36 : 28,
-    borderRadius: isWeb ? 18 : 14,
-    backgroundColor: '#ccc',
+  statusCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#bbb',
   },
   attended: {
-    backgroundColor: '#4caf50',
+    backgroundColor: '#4CAF50',
     borderColor: '#388e3c',
   },
   notAttended: {
-    backgroundColor: '#ccc',
-    borderColor: '#bbb',
-  },
-  future: {
-    backgroundColor: '#eee',
-    borderColor: '#bbb',
+    backgroundColor: '#f44336',
+    borderColor: '#d32f2f',
   },
   backButton: {
     marginRight: SCREEN_WIDTH * 0.02,
@@ -246,5 +363,38 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: isWeb ? 18 : 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#8B0000',
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  errorText: {
+    color: '#8B0000',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#8B0000',
+    padding: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 }); 

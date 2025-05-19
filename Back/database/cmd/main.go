@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -237,6 +238,68 @@ func main() {
 		if err != nil {
 			log.Printf("Error al obtener reporte de asistencia: %v", err)
 			http.Error(w, "Error al obtener reporte de asistencia", http.StatusInternalServerError)
+			return
+		}
+
+		// Establecer el tipo de contenido y enviar la respuesta
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(reporte)
+	})
+
+	// 6.1 Obtener asistencia de un estudiante específico
+	http.HandleFunc("/api/db/attendance/student", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		seccionID, err := strconv.Atoi(r.URL.Query().Get("seccion_id"))
+		if err != nil {
+			log.Printf("Error al convertir seccion_id: %v", err)
+			http.Error(w, "ID de sección inválido", http.StatusBadRequest)
+			return
+		}
+
+		alumnoID, err := strconv.Atoi(r.URL.Query().Get("alumno_id"))
+		if err != nil {
+			log.Printf("Error al convertir alumno_id: %v", err)
+			http.Error(w, "ID de alumno inválido", http.StatusBadRequest)
+			return
+		}
+
+		// Verificar que el estudiante existe y está inscrito en la sección
+		var exists bool
+		err = db.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1 
+				FROM Inscripciones 
+				WHERE AlumnoID = $1 AND SeccionID = $2
+			)`, alumnoID, seccionID).Scan(&exists)
+
+		if err != nil {
+			log.Printf("Error al verificar inscripción: %v", err)
+			http.Error(w, "Error al verificar la inscripción del estudiante", http.StatusInternalServerError)
+			return
+		}
+
+		if !exists {
+			http.Error(w, "El estudiante no está inscrito en esta sección", http.StatusNotFound)
+			return
+		}
+
+		// Ejecutar la función directamente
+		query := `SELECT * FROM obtener_asistencia_estudiante_seccion($1, $2)`
+		var reporte []byte
+		err = db.QueryRow(query, seccionID, alumnoID).Scan(&reporte)
+		if err != nil {
+			log.Printf("Error al obtener reporte de asistencia del estudiante: %v", err)
+			http.Error(w, fmt.Sprintf("Error al obtener reporte de asistencia: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Verificar que el reporte no esté vacío
+		if len(reporte) == 0 {
+			http.Error(w, "No se encontraron datos de asistencia", http.StatusNotFound)
 			return
 		}
 

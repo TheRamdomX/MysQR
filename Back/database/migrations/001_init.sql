@@ -271,7 +271,7 @@ BEGIN
     -- paso 0: borrar registros de ReporteAsistencia para la seccion
     DELETE FROM ReporteAsistencia WHERE SeccionID = seccion_id_input;
 
-    -- Paso 1: Insertar en ReporteAsistencia si falta registro para alguna clase programada
+    -- Paso 1: Insertar en ReporteAsistencia las sesiones programadas
     INSERT INTO ReporteAsistencia (AlumnoID, SeccionID, ModuloID, EstadoSesion)
     SELECT 
         i.AlumnoID,
@@ -312,6 +312,88 @@ BEGIN
         GROUP BY a.ID
         ORDER BY a.Nombre, a.Apellido
     ) AS estudiante_data;
+
+    RETURN reporte;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION obtener_asistencia_estudiante_seccion(seccion_id_input INT, alumno_id_input INT)
+RETURNS JSONB AS $$
+DECLARE
+    reporte JSONB;
+    estudiante_existe BOOLEAN;
+    seccion_existe BOOLEAN;
+BEGIN
+    -- Verificar que el estudiante existe
+    SELECT EXISTS(SELECT 1 FROM Alumnos WHERE ID = alumno_id_input) INTO estudiante_existe;
+    IF NOT estudiante_existe THEN
+        RAISE EXCEPTION 'El estudiante con ID % no existe', alumno_id_input;
+    END IF;
+
+    -- Verificar que la sección existe
+    SELECT EXISTS(SELECT 1 FROM Secciones WHERE ID = seccion_id_input) INTO seccion_existe;
+    IF NOT seccion_existe THEN
+        RAISE EXCEPTION 'La sección con ID % no existe', seccion_id_input;
+    END IF;
+
+    -- paso 0: borrar registros de ReporteAsistencia para la seccion y alumno
+    DELETE FROM ReporteAsistencia 
+    WHERE SeccionID = seccion_id_input 
+    AND AlumnoID = alumno_id_input;
+
+    -- Paso 1: Insertar en ReporteAsistencia las sesiones programadas
+    INSERT INTO ReporteAsistencia (AlumnoID, SeccionID, ModuloID, EstadoSesion)
+    SELECT 
+        alumno_id_input,
+        seccion_id_input,
+        pc.ModuloID,
+        'ausente'
+    FROM ProgramacionClases pc
+    LEFT JOIN ReporteAsistencia ra ON ra.AlumnoID = alumno_id_input 
+                                    AND ra.ModuloID = pc.ModuloID 
+                                    AND ra.SeccionID = seccion_id_input
+    WHERE pc.SeccionID = seccion_id_input
+      AND ra.ID IS NULL;
+
+    -- Paso 2: Actualizar registros existentes en ReporteAsistencia según Asistencia real
+    UPDATE ReporteAsistencia ra
+    SET EstadoSesion = 'presente'
+    FROM Asistencia a
+    WHERE ra.AlumnoID = a.AlumnoID
+      AND ra.SeccionID = a.SeccionID
+      AND ra.ModuloID = a.ModuloID
+      AND ra.SeccionID = seccion_id_input
+      AND ra.AlumnoID = alumno_id_input;
+
+    -- Paso 3: Generar el JSON final
+    SELECT jsonb_build_object(
+        'estudiante', a.Nombre || ' ' || a.Apellido,
+        'asistencia', COALESCE(
+            jsonb_object_agg(
+                to_char(m.Fecha, 'MM-DD'), 
+                CASE 
+                    WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
+                    ELSE '🔴'
+                END
+                ORDER BY m.Fecha
+            ),
+            '{}'::jsonb
+        )
+    ) INTO reporte
+    FROM ReporteAsistencia ra
+    JOIN Alumnos a ON a.ID = ra.AlumnoID
+    JOIN Modulos m ON m.ID = ra.ModuloID
+    WHERE ra.SeccionID = seccion_id_input
+    AND ra.AlumnoID = alumno_id_input
+    GROUP BY a.ID, a.Nombre, a.Apellido;
+
+    -- Si no hay datos, devolver un objeto con asistencia vacía
+    IF reporte IS NULL THEN
+        SELECT jsonb_build_object(
+            'estudiante', (SELECT Nombre || ' ' || Apellido FROM Alumnos WHERE ID = alumno_id_input),
+            'asistencia', '{}'::jsonb
+        ) INTO reporte;
+    END IF;
 
     RETURN reporte;
 END;

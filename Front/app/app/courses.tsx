@@ -13,7 +13,6 @@ interface Course {
   id: string;
   nombre: string;
   cit: string;  
-  estudiantes: number;
   asistencia: string[];
 }
 
@@ -84,7 +83,6 @@ export default function Courses() {
             id: seccion.seccion_id.toString(),
             nombre: seccion.nombre,
             cit: `CIT${seccion.asignatura_id}`,
-            estudiantes: 0,
             asistencia: []
         }));
         
@@ -136,7 +134,6 @@ export default function Courses() {
           id: (courses.length + 1).toString(),
           nombre,
           cit,
-          estudiantes: parseInt(estudiantes),
           asistencia: [],
         },
       ]);
@@ -150,8 +147,7 @@ export default function Courses() {
   const renderItem = ({ item }: { item: Course }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.nombre}</Text>
-      <Text style={styles.text}>CIT: {item.cit}</Text>
-      <Text style={styles.text}>Estudiantes: {item.estudiantes}</Text>
+      <Text style={styles.text}>Codigo: {item.cit}</Text>
       <TouchableOpacity
         style={styles.attendanceButton}
         onPress={() => router.push(`/attendance-list?courseId=${item.id}`)}
