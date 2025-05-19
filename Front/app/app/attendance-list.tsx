@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://192.168.225.9:8088';
 
 interface Attendance {
   [key: string]: string;

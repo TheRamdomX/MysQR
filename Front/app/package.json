@@ -50,5 +50,5 @@
     "typescript": "~5.8.3"
   },
   "private": true,
-  "proxy": "http://192.168.100.54:8088"
+  "proxy": "http://192.168.225.9:8088"
 }

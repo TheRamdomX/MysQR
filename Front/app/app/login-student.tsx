@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Cambiamos localhost por la IP de tu computadora en la red local
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://192.168.225.9:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
