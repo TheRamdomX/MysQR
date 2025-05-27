@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = 'http://192.168.100.18:8088';
 
 interface Attendance {
   [key: string]: string;
@@ -20,6 +20,7 @@ export default function AttendanceList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     const fetchAttendanceData = async () => {
@@ -70,7 +71,7 @@ export default function AttendanceList() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={StylesHeader.header}>
+      <View style={[StylesHeader.header, { flexDirection: 'row', alignItems: 'center' }]}>
         <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
           <Text style={styles.backButtonText}>{'< Volver'}</Text>
         </TouchableOpacity>
@@ -80,6 +81,30 @@ export default function AttendanceList() {
           resizeMode="contain"
         />
         <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
+
+        <TouchableOpacity
+            style={[styles.editButton , { marginLeft: 'auto' }]}
+            onPress={() => {
+              if (!editMode) {
+                setEditMode(true);
+              } else {
+                // Aquí se llamará la función de confirmación que implementará tu colega
+                setEditMode(false); // Volver al texto inicial del botón
+              }
+            }}
+        >
+          <Text style={styles.editButtonText}>
+            {editMode ? 'Confirmar cambios' : 'Editar lista manualmente'}
+          </Text>
+        </TouchableOpacity>
+        {editMode && (
+          <TouchableOpacity
+            style={[styles.cancelButton, { marginLeft: 10 }]} // Botón de cancelar
+            onPress={() => setEditMode(false)}
+          >
+            <Text style={styles.cancelButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.container}>
@@ -194,6 +219,31 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
+  editButton: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    alignSelf: 'center',
+  },
+  editButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  cancelButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    alignSelf: 'center',
+  },
+  cancelButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -227,4 +277,4 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-}); 
+});
