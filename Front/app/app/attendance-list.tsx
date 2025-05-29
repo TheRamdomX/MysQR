@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, CheckBox } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 const API_URL = 'http://192.168.100.18:8088';
 
 interface Attendance {
-  [key: string]: string;
+  [key: string]: boolean;
 }
 
 interface Student {
@@ -21,6 +21,7 @@ export default function AttendanceList() {
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [editMode, setEditMode] = useState(false);
+  const [modifiedAttendance, setModifiedAttendance] = useState<{ [key: string]: Attendance }>({});
 
   useEffect(() => {
     const fetchAttendanceData = async () => {
@@ -48,6 +49,49 @@ export default function AttendanceList() {
 
     fetchAttendanceData();
   }, [courseId]);
+
+  const handleCheckboxChange = (studentName: string, date: string) => {
+    if (!editMode) return;
+
+    setModifiedAttendance(prev => {
+      const updatedAttendance = { ...prev };
+      if (!updatedAttendance[studentName]) {
+        updatedAttendance[studentName] = {};
+      }
+      updatedAttendance[studentName][date] = !updatedAttendance[studentName][date];
+      return updatedAttendance;
+    });
+  };
+
+  const handleConfirmChanges = async () => {
+    try {
+      for (const studentName in modifiedAttendance) {
+        for (const date in modifiedAttendance[studentName]) {
+          const isPresent = modifiedAttendance[studentName][date];
+          const student = students.find(s => s.estudiante === studentName);
+          if (student) {
+            const alumnoID = studentName;
+            const seccionID = courseId;
+            const moduloID = dates.indexOf(date) + 1;
+
+            await fetch(`${API_URL}/api/db/attendance/manual`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                AlumnoID: alumnoID,
+                SeccionID: seccionID,
+                ModuloID: moduloID,
+              }),
+            });
+          }
+        }
+      }
+      setEditMode(false);
+      setModifiedAttendance({});
+    } catch (error) {
+      console.error('Error al confirmar cambios:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -83,15 +127,14 @@ export default function AttendanceList() {
         <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
 
         <TouchableOpacity
-            style={[styles.editButton , { marginLeft: 'auto' }]}
-            onPress={() => {
-              if (!editMode) {
-                setEditMode(true);
-              } else {
-                // Aquí se llamará la función de confirmación que implementará tu colega
-                setEditMode(false); // Volver al texto inicial del botón
-              }
-            }}
+          style={[styles.editButton, { marginLeft: 'auto' }]}
+          onPress={() => {
+            if (!editMode) {
+              setEditMode(true);
+            } else {
+              handleConfirmChanges();
+            }
+          }}
         >
           <Text style={styles.editButtonText}>
             {editMode ? 'Confirmar cambios' : 'Editar lista manualmente'}
@@ -129,9 +172,11 @@ export default function AttendanceList() {
                   </View>
                   {dates.map((date) => (
                     <View key={date} style={styles.cell}>
-                      <Text style={styles.attendanceText}>
-                        {student.asistencia[date] || '❌'}
-                      </Text>
+                      <CheckBox
+                        value={modifiedAttendance[student.estudiante]?.[date] ?? student.asistencia[date]}
+                        onValueChange={() => handleCheckboxChange(student.estudiante, date)}
+                        disabled={!editMode}
+                      />
                     </View>
                   ))}
                 </View>
