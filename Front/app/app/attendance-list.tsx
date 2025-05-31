@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = 'http://192.168.148.143:8088';
 
 interface Attendance {
   [key: string]: string;
@@ -20,6 +20,9 @@ export default function AttendanceList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [editMode, setEditMode] = useState(false);
+  const [editedAttendance, setEditedAttendance] = useState<Student[] | null>(null);
+  const [hoveredStudent, setHoveredStudent] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAttendanceData = async () => {
@@ -48,6 +51,61 @@ export default function AttendanceList() {
     fetchAttendanceData();
   }, [courseId]);
 
+  // Función pa sacar la asistencia
+  const calcularPorcentajeAsistencia = () => {
+    let total = 0;
+    let presentes = 0;
+    students.forEach((student) => {
+      dates.forEach((date) => {
+        total++;
+        if (student.asistencia[date] === '🟢') {
+          presentes++;
+        }
+      });
+    });
+    if (total === 0) return 0;
+    return Math.round((presentes / total) * 100);
+  };
+
+  const porcentajeAsistencia = calcularPorcentajeAsistencia();
+  const porcentajeMinimo = 70;
+
+  // Función para manejar el click en un punto de asistencia
+  const handleToggleAttendance = (studentIdx: number, date: string) => {
+    if (!editMode || !editedAttendance) return;
+    setEditedAttendance(prev => {
+      if (!prev) return prev;
+      const newData = [...prev];
+      const student = { ...newData[studentIdx] };
+      const asistencia = { ...student.asistencia };
+      asistencia[date] = asistencia[date] && asistencia[date] !== '❌' && asistencia[date] !== '🔴' ? '🔴' : '🟢';
+      student.asistencia = asistencia;
+      newData[studentIdx] = student;
+      return newData;
+    });
+  };
+
+  // Clona los datos actuales pa la edición
+  const handleEdit = () => {
+    setEditedAttendance(JSON.parse(JSON.stringify(students)));
+    setEditMode(true);
+  };
+
+  // Cancelar el modo de edición
+  const handleCancel = () => {
+    setEditMode(false);
+    setEditedAttendance(null);
+  };
+
+  // Guardar los cambios
+  const handleSave = () => {
+    if (editedAttendance) {
+      setStudents(editedAttendance);
+    }
+    setEditMode(false);
+    setEditedAttendance(null);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -69,7 +127,7 @@ export default function AttendanceList() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={StylesHeader.header}>
         <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
           <Text style={styles.backButtonText}>{'< Volver'}</Text>
@@ -82,10 +140,39 @@ export default function AttendanceList() {
         <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
       </View>
 
-      <View style={styles.container}>
+      <View style={styles.mainContentRow}>
+        <View style={styles.cardsRow}>
+          <View style={styles.infoCard}>
+            <Text style={styles.cardTitle}>Asistencia General</Text>
+            <Text style={styles.cardValue}>{porcentajeAsistencia}%</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.cardTitle}>Mínimo para aprobar</Text>
+            <Text style={styles.cardValue}>{porcentajeMinimo}%</Text>
+          </View>
+          <View style={styles.editButtonsContainer}>
+            {!editMode ? (
+              <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                  <Text style={styles.saveButtonText}>Guardar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.containerCentered}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={styles.headerRow}>
+          <View style={styles.tableCard}>
+            <View style={styles.headerRowRounded}>
               <View style={[styles.cell, styles.nameCell]}>
                 <Text style={styles.headerText}>Estudiante</Text>
               </View>
@@ -97,16 +184,47 @@ export default function AttendanceList() {
             </View>
 
             <ScrollView>
-              {students.map((student) => (
+              {(editMode ? (editedAttendance || []) : students).map((student, studentIdx) => (
                 <View key={student.estudiante} style={styles.row}>
                   <View style={[styles.cell, styles.nameCell]}>
-                    <Text style={styles.studentName}>{student.estudiante}</Text>
+                    {Platform.OS === 'web' ? (
+                      <div
+                        onMouseEnter={() => setHoveredStudent(student.estudiante)}
+                        onMouseLeave={() => setHoveredStudent(null)}
+                        style={{ position: 'relative', width: '100%' }}
+                      >
+                        <Text style={styles.studentName}>{student.estudiante}</Text>
+                        {hoveredStudent === student.estudiante && (
+                          <View style={styles.tooltip}>
+                            <Text style={styles.tooltipText}>
+                              {(() => {
+                                const total = dates.length;
+                                const presentes = dates.filter(date => student.asistencia[date] === '🟢').length;
+                                return total === 0 ? '0%' : `${Math.round((presentes / total) * 100)}% asistencia`;
+                              })()}
+                            </Text>
+                          </View>
+                        )}
+                      </div>
+                    ) : (
+                      <View style={{ position: 'relative', width: '100%' }}>
+                        <Text style={styles.studentName}>{student.estudiante}</Text>
+                      </View>
+                    )}
                   </View>
                   {dates.map((date) => (
                     <View key={date} style={styles.cell}>
-                      <Text style={styles.attendanceText}>
-                        {student.asistencia[date] || '❌'}
-                      </Text>
+                      {editMode ? (
+                        <TouchableOpacity onPress={() => handleToggleAttendance(studentIdx, date)}>
+                          <View style={student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? styles.dotGreen : styles.dotRed} />
+                        </TouchableOpacity>
+                      ) : (
+                        student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? (
+                          <View style={styles.dotGreen} />
+                        ) : (
+                          <View style={styles.dotRed} />
+                        )
+                      )}
                     </View>
                   ))}
                 </View>
@@ -121,20 +239,21 @@ export default function AttendanceList() {
 
 const StylesHeader = StyleSheet.create({
   header: {
-    position: 'absolute',
-    top: 0,
     width: '100%',
-    height: 60,
+    height: 70,
     backgroundColor: '#8B0000',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingTop: 0,
   },
   headerText: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
   },
 });
 
@@ -143,11 +262,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
     padding: 6,
-    marginTop: 60,
+    marginTop: 0,
   },
   image: {
-    width: 200,
-    height: 200,
+    width: 60,
+    height: 60,
     marginRight: 12,
   },
   headerRow: {
@@ -188,6 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#fff',
     alignSelf: 'center',
+    zIndex: 2,
   },
   backButtonText: {
     color: '#8B0000',
@@ -226,5 +346,158 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    minWidth: 140,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTitle: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  cardValue: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 22,
+  },
+  tableCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: 'visible',
+  },
+  dotGreen: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#388E3C',
+  },
+  dotRed: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F44336',
+    borderWidth: 2,
+    borderColor: '#B71C1C',
+  },
+  editButton: {
+    backgroundColor: '#8B0000',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  mainContentRow: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  cardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  editButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 24,
+    gap: 8,
+  },
+  containerCentered: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: '100%',
+    marginTop: 0,
+  },
+  headerRowRounded: {
+    flexDirection: 'row',
+    backgroundColor: '#8B0000',
+    paddingVertical: 6,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  tooltip: {
+    position: 'absolute',
+    left: 0,
+    top: 28,
+    backgroundColor: '#8B0000',
+    opacity: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderWidth: 3,
+    borderColor: '#fff',
+    zIndex: 9999,
+    minWidth: 110,
+    alignItems: 'center',
+    boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  tooltipText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+    textAlign: 'center',
   },
 }); 
