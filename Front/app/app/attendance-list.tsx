@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, CheckBox } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.100.18:8088';
+const API_URL = 'http://localhost:8088';
 
 interface Attendance {
-  [key: string]: boolean;
+  [key: string]: string;
 }
 
 interface Student {
@@ -50,7 +50,7 @@ export default function AttendanceList() {
     fetchAttendanceData();
   }, [courseId]);
 
-  const handleCheckboxChange = (studentName: string, date: string) => {
+  const handleToggleAttendance = (studentName: string, date: string) => {
     if (!editMode) return;
 
     setModifiedAttendance(prev => {
@@ -58,16 +58,17 @@ export default function AttendanceList() {
       if (!updatedAttendance[studentName]) {
         updatedAttendance[studentName] = {};
       }
-      updatedAttendance[studentName][date] = !updatedAttendance[studentName][date];
+      updatedAttendance[studentName][date] =
+        updatedAttendance[studentName][date] === '🟢' ? '🔴' : '🟢';
       return updatedAttendance;
     });
   };
 
-  const handleConfirmChanges = async () => {
+  const handleSaveChanges = async () => {
     try {
       for (const studentName in modifiedAttendance) {
         for (const date in modifiedAttendance[studentName]) {
-          const isPresent = modifiedAttendance[studentName][date];
+          const isPresent = modifiedAttendance[studentName][date] === '🟢';
           const student = students.find(s => s.estudiante === studentName);
           if (student) {
             const alumnoID = studentName;
@@ -88,9 +89,15 @@ export default function AttendanceList() {
       }
       setEditMode(false);
       setModifiedAttendance({});
+      await fetchAttendanceData();
     } catch (error) {
-      console.error('Error al confirmar cambios:', error);
+      console.error('Error al guardar cambios:', error);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setModifiedAttendance({});
   };
 
   if (loading) {
@@ -114,8 +121,8 @@ export default function AttendanceList() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={[StylesHeader.header, { flexDirection: 'row', alignItems: 'center' }]}>
+    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+      <View style={StylesHeader.header}>
         <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
           <Text style={styles.backButtonText}>{'< Volver'}</Text>
         </TouchableOpacity>
@@ -125,35 +132,33 @@ export default function AttendanceList() {
           resizeMode="contain"
         />
         <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
-
-        <TouchableOpacity
-          style={[styles.editButton, { marginLeft: 'auto' }]}
-          onPress={() => {
-            if (!editMode) {
-              setEditMode(true);
-            } else {
-              handleConfirmChanges();
-            }
-          }}
-        >
-          <Text style={styles.editButtonText}>
-            {editMode ? 'Confirmar cambios' : 'Editar lista manualmente'}
-          </Text>
-        </TouchableOpacity>
-        {editMode && (
-          <TouchableOpacity
-            style={[styles.cancelButton, { marginLeft: 10 }]} // Botón de cancelar
-            onPress={() => setEditMode(false)}
-          >
-            <Text style={styles.cancelButtonText}>Cancelar</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
-      <View style={styles.container}>
+      <View style={styles.mainContentRow}>
+        <View style={styles.cardsRow}>
+          <View style={styles.editButtonsContainer}>
+            {!editMode ? (
+              <TouchableOpacity style={styles.editButton} onPress={() => setEditMode(true)}>
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
+                  <Text style={styles.saveButtonText}>Guardar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleCancelEdit}>
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.containerCentered}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={styles.headerRow}>
+          <View style={styles.tableCard}>
+            <View style={styles.headerRowRounded}>
               <View style={[styles.cell, styles.nameCell]}>
                 <Text style={styles.headerText}>Estudiante</Text>
               </View>
@@ -172,11 +177,24 @@ export default function AttendanceList() {
                   </View>
                   {dates.map((date) => (
                     <View key={date} style={styles.cell}>
-                      <CheckBox
-                        value={modifiedAttendance[student.estudiante]?.[date] ?? student.asistencia[date]}
-                        onValueChange={() => handleCheckboxChange(student.estudiante, date)}
-                        disabled={!editMode}
-                      />
+                      {editMode ? (
+                        <TouchableOpacity onPress={() => handleToggleAttendance(student.estudiante, date)}>
+                          <View
+                            style={
+                              modifiedAttendance[student.estudiante]?.[date] === '🟢' ||
+                              (!modifiedAttendance[student.estudiante]?.[date] && student.asistencia[date] === '🟢')
+                                ? styles.dotGreen
+                                : styles.dotRed
+                            }
+                          />
+                        </TouchableOpacity>
+                      ) : (
+                        student.asistencia[date] === '🟢' ? (
+                          <View style={styles.dotGreen} />
+                        ) : (
+                          <View style={styles.dotRed} />
+                        )
+                      )}
                     </View>
                   ))}
                 </View>
@@ -191,39 +209,47 @@ export default function AttendanceList() {
 
 const StylesHeader = StyleSheet.create({
   header: {
-    position: 'absolute',
-    top: 0,
     width: '100%',
-    height: 60,
+    height: 70,
     backgroundColor: '#8B0000',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingTop: 0,
   },
   headerText: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
   },
 });
 
 const styles = StyleSheet.create({
-  container: {
+  containerCentered: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#f5f5f5',
-    padding: 6,
-    marginTop: 60,
   },
-  image: {
-    width: 200,
-    height: 200,
-    marginRight: 12,
+  tableCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  headerRow: {
+  headerRowRounded: {
     flexDirection: 'row',
     backgroundColor: '#8B0000',
     paddingVertical: 6,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
   },
   row: {
     flexDirection: 'row',
@@ -248,8 +274,21 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 13,
   },
-  attendanceText: {
-    fontSize: 16,
+  dotGreen: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#388E3C',
+  },
+  dotRed: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F44336',
+    borderWidth: 2,
+    borderColor: '#B71C1C',
   },
   backButton: {
     marginRight: 10,
@@ -277,15 +316,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
-  cancelButton: {
+  saveButton: {
+    marginLeft: 10,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 4,
-    backgroundColor: '#fff',
+    backgroundColor: '#4CAF50',
+    alignSelf: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  cancelButton: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#F44336',
     alignSelf: 'center',
   },
   cancelButtonText: {
-    color: '#8B0000',
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -323,3 +376,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
