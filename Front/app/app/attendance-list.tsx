@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import ProtectedRoute from '../components/ProtectedRoute';
 
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = 'http://192.168.99.124:8088';
 
 interface Attendance {
   [key: string]: string;
@@ -69,6 +70,7 @@ export default function AttendanceList() {
   }
 
   return (
+    <ProtectedRoute>
     <View style={{ flex: 1 }}>
       <View style={StylesHeader.header}>
         <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
@@ -116,6 +118,7 @@ export default function AttendanceList() {
         </ScrollView>
       </View>
     </View>
+    </ProtectedRoute>
   );
 }
 
@@ -136,6 +139,7 @@ const StylesHeader = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
   },
+  
 });
 
 const styles = StyleSheet.create({
