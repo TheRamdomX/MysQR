@@ -13,14 +13,37 @@ import (
 
 var QRData = utils.QRData{}
 
+// borrar: var (
+// borrar:     rdb = redis.NewClient(&redis.Options{
+// borrar:         Addr: fmt.Sprintf("%s:%s",
+// borrar:             getEnv("REDIS_HOST", "localhost"),
+// borrar:             getEnv("REDIS_PORT", "6379")),
+// borrar:     })
+// borrar:     ctx = context.Background()
+// borrar: )
+
+// agregado: rdb se inicializará en InitRedis()
 var (
+	rdb *redis.Client          // cliente Redis, inicializado en InitRedis()
+	ctx = context.Background() // contexto compartido
+)
+
+// InitRedis inicializa el cliente Redis usando las variables de entorno REDIS_HOST y REDIS_PORT.
+// Debe llamarse una vez al arrancar el servicio (p.ej., en main.go).
+// Ejemplo: storage.InitRedis()
+
+// agregado: función para inicializar la conexión a Redis
+func InitRedis() {
 	rdb = redis.NewClient(&redis.Options{
 		Addr: fmt.Sprintf("%s:%s",
 			getEnv("REDIS_HOST", "localhost"),
 			getEnv("REDIS_PORT", "6379")),
 	})
-	ctx = context.Background()
-)
+	// opcionalmente, podrías hacer un ping para verificar la conectividad:
+	// if err := rdb.Ping(ctx).Err(); err != nil {
+	//     panic(fmt.Errorf("no se pudo conectar a Redis: %w", err))
+	// }
+}
 
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
@@ -37,8 +60,22 @@ func StoreInRedis(data utils.QRData) error {
 	}
 
 	key := utils.GenerateRedisKey(data.ClassID, data.UUID)
-	if err := rdb.Set(ctx, key, encrypted, 6000*time.Second).Err(); err != nil {
+	// borrar: if err := rdb.Set(ctx, key, encrypted, 6000*time.Second).Err(); err != nil {
+	// borrar:     return fmt.Errorf("redis set failed: %w", err)
+	// borrar: }
+	// borrar: return nil
+
+	// agregado (TTL configurable): guardar en Redis con expiración de 6000 segundos (100 minutos)
+	if err := rdb.Set(ctx, key, encrypted, 600*time.Second).Err(); err != nil {
 		return fmt.Errorf("redis set failed: %w", err)
+	}
+	return nil
+}
+
+// SaveQRWithTTL guarda la cadena 'value' en la clave 'key' con expiración 'ttl'
+func SaveQRWithTTL(key, value string, ttl time.Duration) error {
+	if err := rdb.Set(ctx, key, value, ttl).Err(); err != nil {
+		return fmt.Errorf("SaveQRWithTTL failed: %w", err)
 	}
 	return nil
 }
