@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"mysqr/qr/pkg/auth"
+	"mysqr/qr/pkg/encryption"
+	"mysqr/qr/pkg/listeners" // agregado: import del paquete listeners
 	"mysqr/qr/pkg/storage"
 	"mysqr/qr/pkg/utils"
 
@@ -13,6 +15,18 @@ func main() {
 	// Configurar Gin en modo debug
 	gin.SetMode(gin.DebugMode)
 	r := gin.Default()
+
+	// Asegurarnos de crear/recuperar la clave AES diaria
+	if _, err := encryption.EnsureDailyAESKey(); err != nil {
+		log.Fatalf("No pude generar/leer la clave AES diaria: %v", err)
+	}
+	log.Println("Clave AES diaria cargada correctamente.")
+
+	// Inicializar Redis (para que listeners y storage puedan usar rdb)
+	storage.InitRedis()
+
+	// agregado: arrancar en segundo plano el listener de comandos Redis para qr_commands
+	go listeners.StartCommandListener()
 
 	// Configurar CORS
 	r.Use(func(c *gin.Context) {
