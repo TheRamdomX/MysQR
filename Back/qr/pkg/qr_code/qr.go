@@ -28,7 +28,7 @@ func StartQRGeneration(classID string) {
 
 	go func() {
 		log.Printf("QR generation started for class: %s", classID)
-		ticker := time.NewTicker(1000 * time.Second) //reset of the qr code
+		ticker := time.NewTicker(1000 * time.Second) // reset of the QR code
 		defer ticker.Stop()
 
 		generateQRForClass(classID)
@@ -36,7 +36,7 @@ func StartQRGeneration(classID string) {
 		for {
 			select {
 			case <-ticker.C:
-				generateQRForClass(classID) // frontend may have to create a socket connection to get the qr code every x seconds ?
+				generateQRForClass(classID) // frontend may have to create a socket connection to get the QR code every x seconds ?
 			case <-stopChan:
 				activeClasses.Delete(classID)
 				log.Printf("QR generation stopped for class: %s", classID)
@@ -59,17 +59,34 @@ func generateQRForClass(classID string) {
 		UUID:      utils.GenerateUUID(),
 	}
 
+	// Encriptar el payload con AES-GCM diario
 	encrypted, err := encryption.EncryptData(qrData)
 	if err != nil {
 		log.Printf("Encryption error: %v", err)
 		return
 	}
 
-	if err := storage.StoreInRedis(qrData); err != nil {
-		log.Printf("Redis error: %v", err)
+	// borrar: if err := storage.StoreInRedis(qrData); err != nil {
+	// borrar:     log.Printf("Redis error: %v", err)
+	// borrar: }
+
+	// agregado (TTL en Redis): guardar en Redis la clave "qr:<classID>:<UUID>" con valor "encrypted"
+	//                         y expiración de 100 minutos (100 * time.Minute)
+	ttl := time.Duration(10) * time.Minute
+	redisKey := fmt.Sprintf("qr:%s:%s", classID, qrData.UUID)
+	if err := storage.SaveQRWithTTL(redisKey, encrypted, ttl); err != nil {
+		log.Printf("Redis error al guardar con TTL: %v", err)
 	}
 
-	if err := generateQRImage(encrypted, qrData.UUID); err != nil {
+	// borrar: if err := generateQRImage(encrypted, qrData.UUID); err != nil {
+	// borrar:     log.Printf("QR generation error: %v", err)
+	// borrar: }
+
+	// agregado (modificación en nombre de archivo): generar imagen QR usando la URL de validación
+	// Construir la URL que el QR debe contener, por ejemplo:
+	//    https://<tu-dominio>/qr/validate/{classID}/{UUID}
+	qrURL := fmt.Sprintf("https://tu-dominio/qr/validate/%s/%s", classID, qrData.UUID)
+	if err := generateQRImage(qrURL, qrData.UUID); err != nil {
 		log.Printf("QR generation error: %v", err)
 	}
 
@@ -87,10 +104,17 @@ func generateQRImage(content, uuid string) error {
 		return fmt.Errorf("failed to create directory %s: %w", outDir, err)
 	}
 
-	w, err := standard.New("qrcodes/qr.png")
+	// borrar: w, err := standard.New("qrcodes/qr.png")
+	// borrar: if err != nil {
+	// borrar:     return err
+	// borrar: }
+	// borrar: return qrc.Save(w)
+
+	// agregado: cada QR se guarda como "<classID>_<UUID>.png" para evitar sobreescrituras
+	outPath := fmt.Sprintf("%s/%s.png", outDir, uuid)
+	w, err := standard.New(outPath)
 	if err != nil {
 		return err
 	}
-
 	return qrc.Save(w)
 }
