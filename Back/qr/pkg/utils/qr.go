@@ -18,13 +18,13 @@ type QRData struct {
 func NewQRData(classID, professorID, sectionID, moduleID string) QRData {
 	now := time.Now()
 	return QRData{
-		UUID:        GenerateUUID(),
+		UUID:        GenerateUUID(), // usa la función agregada abajo
 		ClassID:     classID,
 		ProfessorID: professorID,
 		SectionID:   sectionID,
 		ModuleID:    moduleID,
 		Timestamp:   now.Unix(),
 		CreatedAt:   now,
-		ExpiresAt:   now.Add(6000 * time.Second),
+		ExpiresAt:   now.Add(600 * time.Second),
 	}
 }
