@@ -111,7 +111,6 @@ ALTER TABLE Inscripciones ADD FOREIGN KEY (SeccionID) REFERENCES Secciones(ID);
 ALTER TABLE Asistencia ADD FOREIGN KEY (AlumnoID) REFERENCES Alumnos(ID);
 ALTER TABLE Asistencia ADD FOREIGN KEY (SeccionID) REFERENCES Secciones(ID);
 ALTER TABLE Asistencia ADD FOREIGN KEY (ModuloID) REFERENCES Modulos(ID);
-ALTER TABLE Asistencia ADD FOREIGN KEY (ProfesorID) REFERENCES Profesores(ID);
 ALTER TABLE QRGenerado ADD FOREIGN KEY (ProfesorID) REFERENCES Profesores(ID);
 ALTER TABLE QRGenerado ADD FOREIGN KEY (ModuloID) REFERENCES Modulos(ID);
 ALTER TABLE ReporteAsistencia ADD FOREIGN KEY (AlumnoID) REFERENCES Alumnos(ID);
@@ -213,6 +212,36 @@ INSERT INTO Inscripciones (ID, AlumnoID, SeccionID) VALUES
 (14, 4, 3),
 (15, 5, 3);
 
+CREATE TABLE asistencia_1 PARTITION OF asistencia
+FOR VALUES IN (1);
+
+CREATE TABLE asistencia_2 PARTITION OF asistencia
+FOR VALUES IN (2);
+
+CREATE TABLE asistencia_3 PARTITION OF asistencia
+FOR VALUES IN (3);
+
+CREATE TABLE asistencia_4 PARTITION OF asistencia
+FOR VALUES IN (4);
+
+CREATE TABLE asistencia_5 PARTITION OF asistencia
+FOR VALUES IN (5);
+
+CREATE TABLE reporte_asistencia_1 PARTITION OF ReporteAsistencia
+FOR VALUES IN (1);
+
+CREATE TABLE reporte_asistencia_2 PARTITION OF ReporteAsistencia
+FOR VALUES IN (2);
+
+CREATE TABLE reporte_asistencia_3 PARTITION OF ReporteAsistencia
+FOR VALUES IN (3);
+
+CREATE TABLE reporte_asistencia_4 PARTITION OF ReporteAsistencia
+FOR VALUES IN (4);
+
+CREATE TABLE reporte_asistencia_5 PARTITION OF ReporteAsistencia
+FOR VALUES IN (5);
+
 -- Insertar registros de asistencia
 INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd) VALUES
 (1, 1, 1, 1, CURRENT_TIMESTAMP, 0),
@@ -249,17 +278,7 @@ INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC) VALUES
 (2, 2, CURRENT_TIMESTAMP, '00:0D:3C:04:78:5B'),
 (3, 3, CURRENT_TIMESTAMP, '00:1C:B3:08:76:21');
 
-CREATE TABLE asistencia_1 PARTITION OF asistencia
-FOR VALUES IN (1);
 
-CREATE TABLE asistencia_2 PARTITION OF asistencia
-FOR VALUES IN (2);
-
-CREATE TABLE asistencia_3 PARTITION OF asistencia
-FOR VALUES IN (3);
-
-CREATE TABLE asistencia_4 PARTITION OF asistencia
-FOR VALUES IN (4);
 
 
 CREATE OR REPLACE FUNCTION obtener_asistencia_por_seccion(seccion_id_input INT)

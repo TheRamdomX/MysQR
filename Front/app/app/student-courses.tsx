@@ -5,10 +5,12 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ProtectedRoute from '../components/ProtectedRoute';
+import { useAuth } from '../context/AuthContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = 'http://192.168.99.124:8088';
 
 interface Course {
   id: string;
@@ -32,56 +34,53 @@ interface SeccionAsignatura {
 
 export default function CoursesStudent() {
   const router = useRouter();
+  const { logout, userData } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
   const [hora, setHora] = useState('');
   const [scanned, setScanned] = useState(false);
   const [scannedData, setScannedData] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
-  const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadStudentSections = async () => {
+      if (!userData?.alumnoId) return;
+      
       try {
-        const storedData = await AsyncStorage.getItem('userData');
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          setUserData(parsedData);
-          // Cargar secciones del alumno
-          await loadStudentSections(parsedData.alumnoId);
+        const numId = parseInt(userData.alumnoId.toString());
+        if (isNaN(numId)) {
+          console.error('ID de alumno inválido');
+          return;
         }
+        console.log('Cargando secciones para alumno:', numId);
+        const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
+        console.log('Status de la respuesta:', response.status);
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${await response.text()}`);
+        }
+        const data: SeccionAsignatura[] = await response.json();
+        console.log('Datos de las secciones:', data);
+        const cursos = data.map(seccion => ({
+          id: seccion.seccion_id.toString(),
+          nombre: seccion.nombre,
+          cit: `CIT${seccion.asignatura_id}`,
+          asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
+        }));
+        
+        setCourses(cursos);
       } catch (error) {
-        console.error('Error al cargar datos del usuario:', error);
+        console.error('Error al cargar las secciones:', error);
       }
     };
-    loadUserData();
-  }, []);
+    loadStudentSections();
+  }, [userData]);
 
-  const loadStudentSections = async (alumnoId: string) => {
+  const handleLogout = async () => {
     try {
-      const numId = parseInt(alumnoId);
-      if (isNaN(numId)) {
-        console.error('ID de alumno inválido');
-        return;
-      }
-      console.log('Cargando secciones para alumno:', numId);
-      const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
-      console.log('Status de la respuesta:', response.status);
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${await response.text()}`);
-      }
-      const data: SeccionAsignatura[] = await response.json();
-      console.log('Datos de las secciones:', data);
-      const cursos = data.map(seccion => ({
-        id: seccion.seccion_id.toString(),
-        nombre: seccion.nombre,
-        cit: `CIT${seccion.asignatura_id}`,
-        asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
-      }));
-      
-      setCourses(cursos);
+      await logout();
+      router.replace('/login-student');
     } catch (error) {
-      console.error('Error al cargar las secciones:', error);
+      console.error('Error during logout:', error);
     }
   };
 
@@ -159,6 +158,7 @@ export default function CoursesStudent() {
 
   const renderItem = ({ item }: { item: Course }) => {
     return (
+
       <View style={styles.card}>
         <Text style={styles.title}>{item.nombre}</Text>
         <Text style={styles.text}>CIT: {item.cit}</Text>
@@ -173,13 +173,19 @@ export default function CoursesStudent() {
   };
 
   return (
+    <ProtectedRoute>
     <View style={styles.mainContainer}>
       <View style={styles.header}>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
+        <View style={styles.headerLeft}>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <AntDesign name="logout" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.headerText}>Tus Cursos</Text>
         <View style={styles.horaContainer}>
           <Text style={styles.horaText}>{hora}</Text>
@@ -244,6 +250,7 @@ export default function CoursesStudent() {
         </View>
       </Modal>
     </View>
+    </ProtectedRoute>
   );
 }
 
@@ -265,21 +272,18 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 1,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   headerText: {
     color: '#fff',
     fontSize: isWeb ? 26 : 22,
     fontWeight: 'bold',
-    marginLeft: isWeb ? SCREEN_WIDTH * 0.25 : SCREEN_WIDTH * 0.025,
-  },
-  container: {
-    paddingTop: isWeb ? 25 : 32,
-    backgroundColor: '#f5f5f5',
-    padding: SCREEN_WIDTH * 0.02,
-    marginTop: isWeb ? 80 : 60,
-  },
-  list: {
-    justifyContent: 'center',
-    paddingBottom: isWeb ? 100 : 80,
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: -50 }],
   },
   horaContainer: {
     position: 'absolute',
@@ -302,6 +306,16 @@ const styles = StyleSheet.create({
     width: isWeb ? 300 : 100,
     height: isWeb ? 300 : 250,
     marginRight: SCREEN_WIDTH * 0.02,
+  },
+  container: {
+    paddingTop: isWeb ? 25 : 32,
+    backgroundColor: '#f5f5f5',
+    padding: SCREEN_WIDTH * 0.02,
+    marginTop: isWeb ? 80 : 60,
+  },
+  list: {
+    justifyContent: 'center',
+    paddingBottom: isWeb ? 100 : 80,
   },
   card: {
     flex: 1,
@@ -455,5 +469,10 @@ const styles = StyleSheet.create({
   scanAgainButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
 });

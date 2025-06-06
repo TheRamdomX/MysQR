@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import ProtectedRoute from '../components/ProtectedRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = '192.168.99.124:8080';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface Course {
@@ -158,96 +159,98 @@ export default function Courses() {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={StylesHeader.header}>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={StylesHeader.headerText}>Tus Cursos</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => setQrVisible(true)}
-        >
-          <Text style={styles.buttonText}>Generar QR</Text>
-        </Pressable>
-      </View>
-
-      <Modal visible={qrVisible} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-          <View style={styles.qrModalContent}>
-            <TouchableOpacity
-              onPress={() => setQrVisible(false)}
-              style={styles.closeIcon}
-            >
-              <AntDesign name="close" size={35} color="#ffff" />
-            </TouchableOpacity>
-            {currentClass ? (
-              <>
-                {console.log('Current Class Data:', currentClass)}
-                <QRCode 
-                  value={JSON.stringify(qrData)}
-                  size={650}
-                  backgroundColor="white"
-                  color="black"
-                />
-              </>
-            ) : (
-              <Text style={styles.errorText}>No hay clase programada en este momento</Text>
-            )}
-          </View>
+    <ProtectedRoute>
+      <View style={{ flex: 1 }}>
+        <View style={StylesHeader.header}>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <Text style={StylesHeader.headerText}>Tus Cursos</Text>
+          <Pressable
+            style={styles.button}
+            onPress={() => setQrVisible(true)}
+          >
+            <Text style={styles.buttonText}>Generar QR</Text>
+          </Pressable>
         </View>
-      </Modal>  
 
-      <View style={styles.container}>
-        <FlatList
-          data={courses}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={Platform.OS === 'web' ? 3 : 1}
-          contentContainerStyle={styles.list}
-        />
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <AntDesign name="pluscircle" size={56} color="#8B0000" />
-        </TouchableOpacity>
-
-        <Modal visible={modalVisible} transparent animationType="slide">
+        <Modal visible={qrVisible} transparent animationType="fade">
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Agregar Curso</Text>
-              <TextInput
-                placeholder="Nombre"
-                value={nombre}
-                onChangeText={setNombre}
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="CIT"
-                value={cit}
-                onChangeText={setCit}
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="Estudiantes"
-                value={estudiantes}
-                onChangeText={setEstudiantes}
-                keyboardType="numeric"
-                style={styles.input}
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
-                  <Text style={styles.buttonText}>Agregar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
-                  <Text style={styles.buttonText}>Cancelar</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.qrModalContent}>
+              <TouchableOpacity
+                onPress={() => setQrVisible(false)}
+                style={styles.closeIcon}
+              >
+                <AntDesign name="close" size={35} color="#ffff" />
+              </TouchableOpacity>
+              {currentClass ? (
+                <>
+                  {console.log('Current Class Data:', currentClass)}
+                  <QRCode 
+                    value={JSON.stringify(qrData)}
+                    size={650}
+                    backgroundColor="white"
+                    color="black"
+                  />
+                </>
+              ) : (
+                <Text style={styles.errorText}>No hay clase programada en este momento</Text>
+              )}
             </View>
           </View>
-        </Modal>
+        </Modal>  
+
+        <View style={styles.container}>
+          <FlatList
+            data={courses}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            numColumns={Platform.OS === 'web' ? 3 : 1}
+            contentContainerStyle={styles.list}
+          />
+          <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+            <AntDesign name="pluscircle" size={56} color="#8B0000" />
+          </TouchableOpacity>
+
+          <Modal visible={modalVisible} transparent animationType="slide">
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Agregar Curso</Text>
+                <TextInput
+                  placeholder="Nombre"
+                  value={nombre}
+                  onChangeText={setNombre}
+                  style={styles.input}
+                />
+                <TextInput
+                  placeholder="CIT"
+                  value={cit}
+                  onChangeText={setCit}
+                  style={styles.input}
+                />
+                <TextInput
+                  placeholder="Estudiantes"
+                  value={estudiantes}
+                  onChangeText={setEstudiantes}
+                  keyboardType="numeric"
+                  style={styles.input}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
+                    <Text style={styles.buttonText}>Agregar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
+                    <Text style={styles.buttonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </View>
       </View>
-    </View>
+    </ProtectedRoute>
   );
 }
 
