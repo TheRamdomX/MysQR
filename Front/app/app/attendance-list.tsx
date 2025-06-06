@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIn
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.148.143:8088';
 
 interface Attendance {
   [key: string]: string;
@@ -22,6 +22,8 @@ export default function AttendanceList() {
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [editMode, setEditMode] = useState(false);
+  const [editedAttendance, setEditedAttendance] = useState<Student[] | null>(null);
+  const [hoveredStudent, setHoveredStudent] = useState<string | null>(null);
   const [modifiedAttendance, setModifiedAttendance] = useState<{ [key: string]: Attendance }>({});
 
   useEffect(() => {
@@ -51,28 +53,60 @@ export default function AttendanceList() {
     fetchAttendanceData();
   }, [courseId]);
 
-  const handleToggleAttendance = (studentName: string, date: string) => {
-    if (!editMode) return;
+  // Función para calcular el porcentaje de asistencia
+  const calcularPorcentajeAsistencia = () => {
+    let total = 0;
+    let presentes = 0;
+    students.forEach((student) => {
+      dates.forEach((date) => {
+        total++;
+        if (student.asistencia[date] === '🟢') {
+          presentes++;
+        }
+      });
+    });
+    if (total === 0) return 0;
+    return Math.round((presentes / total) * 100);
+  };
 
-    setModifiedAttendance(prev => {
-      const updatedAttendance = { ...prev };
-      if (!updatedAttendance[studentName]) {
-        updatedAttendance[studentName] = {};
-      }
-      updatedAttendance[studentName][date] =
-        updatedAttendance[studentName][date] === '🟢' ? '🔴' : '🟢';
-      return updatedAttendance;
+  const porcentajeAsistencia = calcularPorcentajeAsistencia();
+  const porcentajeMinimo = 70;
+
+  // Función para manejar el click en un punto de asistencia
+  const handleToggleAttendance = (studentIdx: number, date: string) => {
+    if (!editMode || !editedAttendance) return;
+    setEditedAttendance(prev => {
+      if (!prev) return prev;
+      const newData = [...prev];
+      const student = { ...newData[studentIdx] };
+      const asistencia = { ...student.asistencia };
+      asistencia[date] = asistencia[date] && asistencia[date] !== '❌' && asistencia[date] !== '🔴' ? '🔴' : '🟢';
+      student.asistencia = asistencia;
+      newData[studentIdx] = student;
+      return newData;
     });
   };
 
-  const handleSaveChanges = async () => {
+  // Clona los datos actuales para la edición
+  const handleEdit = () => {
+    setEditedAttendance(JSON.parse(JSON.stringify(students)));
+    setEditMode(true);
+  };
+
+  // Cancelar el modo de edición
+  const handleCancel = () => {
+    setEditMode(false);
+    setEditedAttendance(null);
+  };
+
+  // Guardar los cambios
+  const handleSave = async () => {
     try {
-      for (const studentName in modifiedAttendance) {
-        for (const date in modifiedAttendance[studentName]) {
-          const isPresent = modifiedAttendance[studentName][date] === '🟢';
-          const student = students.find(s => s.estudiante === studentName);
-          if (student) {
-            const alumnoID = studentName;
+      if (editedAttendance) {
+        for (const student of editedAttendance) {
+          for (const date in student.asistencia) {
+            const isPresent = student.asistencia[date] === '🟢';
+            const alumnoID = student.estudiante;
             const seccionID = courseId;
             const moduloID = dates.indexOf(date) + 1;
 
@@ -87,18 +121,13 @@ export default function AttendanceList() {
             });
           }
         }
+        setStudents(editedAttendance);
       }
       setEditMode(false);
-      setModifiedAttendance({});
-      await fetchAttendanceData();
+      setEditedAttendance(null);
     } catch (error) {
       console.error('Error al guardar cambios:', error);
     }
-  };
-
-  const handleCancelEdit = () => {
-    setEditMode(false);
-    setModifiedAttendance({});
   };
 
   if (loading) {
@@ -122,90 +151,114 @@ export default function AttendanceList() {
   }
 
   return (
+    <ProtectedRoute>
+      <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+        <View style={StylesHeader.header}>
+          <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
+            <Text style={styles.backButtonText}>{'< Volver'}</Text>
+          </TouchableOpacity>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
+        </View>
 
-    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <View style={StylesHeader.header}>
-        <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
-          <Text style={styles.backButtonText}>{'< Volver'}</Text>
-        </TouchableOpacity>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
-      </View>
-
-      <View style={styles.mainContentRow}>
-        <View style={styles.cardsRow}>
-          <View style={styles.editButtonsContainer}>
-            {!editMode ? (
-              <TouchableOpacity style={styles.editButton} onPress={() => setEditMode(true)}>
-                <Text style={styles.editButtonText}>Editar</Text>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
-                  <Text style={styles.saveButtonText}>Guardar</Text>
+        <View style={styles.mainContentRow}>
+          <View style={styles.cardsRow}>
+            <View style={styles.infoCard}>
+              <Text style={styles.cardTitle}>Asistencia General</Text>
+              <Text style={styles.cardValue}>{porcentajeAsistencia}%</Text>
+            </View>
+            <View style={styles.infoCard}>
+              <Text style={styles.cardTitle}>Mínimo para aprobar</Text>
+              <Text style={styles.cardValue}>{porcentajeMinimo}%</Text>
+            </View>
+            <View style={styles.editButtonsContainer}>
+              {!editMode ? (
+                <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+                  <Text style={styles.editButtonText}>Editar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelButton} onPress={handleCancelEdit}>
-                  <Text style={styles.cancelButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-              </>
-            )}
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                    <Text style={styles.saveButtonText}>Guardar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                    <Text style={styles.cancelButtonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.containerCentered}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.tableCard}>
-            <View style={styles.headerRowRounded}>
-              <View style={[styles.cell, styles.nameCell]}>
-                <Text style={styles.headerText}>Estudiante</Text>
-              </View>
-              {dates.map((date) => (
-                <View key={date} style={styles.cell}>
-                  <Text style={styles.headerText}>{date}</Text>
+        <View style={styles.containerCentered}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.tableCard}>
+              <View style={styles.headerRowRounded}>
+                <View style={[styles.cell, styles.nameCell]}>
+                  <Text style={styles.headerText}>Estudiante</Text>
                 </View>
-              ))}
-            </View>
-
-            <ScrollView>
-              {students.map((student) => (
-                <View key={student.estudiante} style={styles.row}>
-                  <View style={[styles.cell, styles.nameCell]}>
-                    <Text style={styles.studentName}>{student.estudiante}</Text>
+                {dates.map((date) => (
+                  <View key={date} style={styles.cell}>
+                    <Text style={styles.headerText}>{date}</Text>
                   </View>
-                  {dates.map((date) => (
-                    <View key={date} style={styles.cell}>
-                      {editMode ? (
-                        <TouchableOpacity onPress={() => handleToggleAttendance(student.estudiante, date)}>
-                          <View
-                            style={
-                              modifiedAttendance[student.estudiante]?.[date] === '🟢' ||
-                              (!modifiedAttendance[student.estudiante]?.[date] && student.asistencia[date] === '🟢')
-                                ? styles.dotGreen
-                                : styles.dotRed
-                            }
-                          />
-                        </TouchableOpacity>
+                ))}
+              </View>
+
+              <ScrollView>
+                {(editMode ? (editedAttendance || []) : students).map((student, studentIdx) => (
+                  <View key={student.estudiante} style={styles.row}>
+                    <View style={[styles.cell, styles.nameCell]}>
+                      {Platform.OS === 'web' ? (
+                        <div
+                          onMouseEnter={() => setHoveredStudent(student.estudiante)}
+                          onMouseLeave={() => setHoveredStudent(null)}
+                          style={{ position: 'relative', width: '100%' }}
+                        >
+                          <Text style={styles.studentName}>{student.estudiante}</Text>
+                          {hoveredStudent === student.estudiante && (
+                            <View style={styles.tooltip}>
+                              <Text style={styles.tooltipText}>
+                                {(() => {
+                                  const total = dates.length;
+                                  const presentes = dates.filter(date => student.asistencia[date] === '🟢').length;
+                                  return total === 0 ? '0%' : `${Math.round((presentes / total) * 100)}% asistencia`;
+                                })()}
+                              </Text>
+                            </View>
+                          )}
+                        </div>
                       ) : (
-                        student.asistencia[date] === '🟢' ? (
-                          <View style={styles.dotGreen} />
-                        ) : (
-                          <View style={styles.dotRed} />
-                        )
+                        <View style={{ position: 'relative', width: '100%' }}>
+                          <Text style={styles.studentName}>{student.estudiante}</Text>
+                        </View>
                       )}
                     </View>
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </ScrollView>
+                    {dates.map((date) => (
+                      <View key={date} style={styles.cell}>
+                        {editMode ? (
+                          <TouchableOpacity onPress={() => handleToggleAttendance(studentIdx, date)}>
+                            <View style={student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? styles.dotGreen : styles.dotRed} />
+                          </TouchableOpacity>
+                        ) : (
+                          student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? (
+                            <View style={styles.dotGreen} />
+                          ) : (
+                            <View style={styles.dotRed} />
+                          )
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </ScrollView>
+        </View>
       </View>
-    </View>
     </ProtectedRoute>
   );
 }
@@ -228,7 +281,6 @@ const StylesHeader = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  
 });
 
 const styles = StyleSheet.create({
@@ -237,23 +289,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+    padding: 6,
+    marginTop: 0,
   },
-  tableCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  image: {
+    width: 60,
+    height: 60,
+    marginRight: 12,
   },
   headerRowRounded: {
     flexDirection: 'row',
     backgroundColor: '#8B0000',
     paddingVertical: 6,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   row: {
     flexDirection: 'row',
@@ -301,48 +350,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#fff',
     alignSelf: 'center',
+    zIndex: 2,
   },
   backButtonText: {
     color: '#8B0000',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  editButton: {
-    marginLeft: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    alignSelf: 'center',
-  },
-  editButtonText: {
-    color: '#8B0000',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  saveButton: {
-    marginLeft: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
-    alignSelf: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  cancelButton: {
-    marginLeft: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-    backgroundColor: '#F44336',
-    alignSelf: 'center',
-  },
-  cancelButtonText: {
-    color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -379,5 +390,128 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  cardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    minWidth: 140,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTitle: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  cardValue: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 22,
+  },
+  tableCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: 'visible',
+  },
+  editButton: {
+    backgroundColor: '#8B0000',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  mainContentRow: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  cardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  editButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 24,
+    gap: 8,
+  },
+  tooltip: {
+    position: 'absolute',
+    left: 0,
+    top: 28,
+    backgroundColor: '#8B0000',
+    opacity: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderWidth: 3,
+    borderColor: '#fff',
+    zIndex: 9999,
+    minWidth: 110,
+    alignItems: 'center',
+    boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  tooltipText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+    textAlign: 'center',
+  },
 });
-

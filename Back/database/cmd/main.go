@@ -46,18 +46,12 @@ func main() {
 	}
 	defer db.Close()
 
-<<<<<<< HEAD
-	
-=======
->>>>>>> origin/Eduardo
-	// Initialize database
-	if err := initDatabase(db); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/Eduardo
+	/*
+		// Initialize database
+		if err := initDatabase(db); err != nil {
+			log.Fatalf("Failed to initialize database: %v", err)
+		}
+	*/
 
 	// Create database service
 	dbService := postgres.NewDatabaseService(db)
