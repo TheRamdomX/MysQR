@@ -24,6 +24,8 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
+const API_URL = 'http://localhost:8088';
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [userToken, setUserToken] = useState<string | null>(null);
@@ -61,9 +63,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const validateToken = async (token: string): Promise<boolean> => {
         try {
-            // Aquí puedes hacer una llamada a tu API para validar el token
-            // Por ejemplo: GET /api/validate-token
-            const response = await fetch('http://192.168.99.124:8088/api/validate-token', {
+            const response = await fetch(`${API_URL}/api/validate-token`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -71,10 +71,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 },
             });
             
-            return response.ok;
+            if (!response.ok) {
+                console.warn('Token inválido:', response.status);
+                return false;
+            }
+            
+            return true;
         } catch (error) {
-            console.error('Error validating token:', error);
-            return false;
+            console.error('Error validando token:', error);
+            // Si hay un error de conexión, asumimos que el token es válido
+            // para evitar cerrar sesión innecesariamente
+            return true;
         }
     };
 

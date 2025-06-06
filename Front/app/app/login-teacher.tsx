@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = 'http://localhost:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
+    const { login } = useAuth();
 
     const handleLogin = async () => {
+        if (!usuario || !contrasena) {
+            Alert.alert('Error', 'Por favor complete todos los campos');
+            return;
+        }
+
+        setIsLoading(true);
         try {
             console.log('Intentando conectar a:', `${API_URL}/api/qr/login`);
             const response = await fetch(`${API_URL}/api/qr/login`, {
@@ -39,14 +47,18 @@ export default function LoginScreen() {
             }
 
             if (response.ok) {
-                // Guardar el token y la información del usuario
-                await AsyncStorage.setItem('userToken', data.token);
-                await AsyncStorage.setItem('userData', JSON.stringify({
+                const userData = {
                     id: data.id,
                     rol: data.rol,
                     rut: data.rut,
                     profesorId: data.profesor_id
-                }));
+                };
+
+                await login(data.token, userData);
+                
+                // Limpiar los campos de entrada
+                setUsuario('');
+                setContrasena('');
                 
                 router.push('/courses');
             } else {
@@ -55,6 +67,8 @@ export default function LoginScreen() {
         } catch (error) {
             console.error('Error de login:', error);
             Alert.alert('Error', 'Error al conectar con el servidor. Por favor, intente nuevamente.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -73,6 +87,7 @@ export default function LoginScreen() {
                         placeholder="Usuario"
                         value={usuario}
                         onChangeText={setUsuario}
+                        editable={!isLoading}
                     />
                     <TextInput
                         style={styles.input}
@@ -80,9 +95,16 @@ export default function LoginScreen() {
                         value={contrasena}
                         onChangeText={setContrasena}
                         secureTextEntry
+                        editable={!isLoading}
                     />
-                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                        <Text style={styles.loginButtonText}>Ingresar</Text>
+                    <TouchableOpacity 
+                        style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+                        onPress={handleLogin}
+                        disabled={isLoading}
+                    >
+                        <Text style={styles.loginButtonText}>
+                            {isLoading ? 'Ingresando...' : 'Ingresar'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -99,9 +121,13 @@ const styles = StyleSheet.create({
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.3)', // Ajusta la opacidad para más o menos difuminado
+        backgroundColor: 'rgba(0,0,0,0.3)',
     },
-    container: { flex:1, justifyContent:'center', alignItems:'center' },
+    container: { 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
     card: {
         width: Platform.OS === 'web' ? '50%' : '100%',
         backgroundColor: '#ffffff',
@@ -114,8 +140,19 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
     },
-    title: { fontSize:24, fontWeight:'bold', marginBottom:20 },
-    input: { width:'100%', borderWidth:1, borderColor:'#ccc', borderRadius:5, padding:10, marginBottom:10 },
+    title: { 
+        fontSize: 24, 
+        fontWeight: 'bold', 
+        marginBottom: 20 
+    },
+    input: { 
+        width: '100%', 
+        borderWidth: 1, 
+        borderColor: '#ccc', 
+        borderRadius: 5, 
+        padding: 10, 
+        marginBottom: 10 
+    },
     loginButton: {
         backgroundColor: '#ff0000',
         paddingVertical: 12,
@@ -125,10 +162,12 @@ const styles = StyleSheet.create({
         marginTop: 10,
         width: '100%',
     },
+    loginButtonDisabled: {
+        backgroundColor: '#ccc',
+    },
     loginButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
     },
-    link: { color:'#1976D2', marginTop:15 }
 }); 

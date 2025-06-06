@@ -179,17 +179,16 @@ func main() {
 		}
 
 		var request struct {
-			ProfesorID int `json:"profesor_id"`
-			AlumnoID   int `json:"alumno_id"`
-			SeccionID  int `json:"seccion_id"`
-			ModuloID   int `json:"modulo_id"`
+			AlumnoID  int `json:"alumno_id"`
+			SeccionID int `json:"seccion_id"`
+			ModuloID  int `json:"modulo_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		if err := dbService.RegisterManualAttendance(request.AlumnoID, request.SeccionID, request.ModuloID, request.ProfesorID); err != nil {
+		if err := dbService.RegisterManualAttendance(request.AlumnoID, request.SeccionID, request.ModuloID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -98,21 +98,34 @@ export default function Courses() {
 
   const loadCurrentClass = async (profesorId: string) => {
     try {
-      console.log('Consultando clase actual para profesor:', profesorId);
-      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${profesorId}`);
+      const numId = parseInt(profesorId);
+      if (isNaN(numId)) {
+        console.error('ID de profesor inválido');
+        return;
+      }
+      
+      console.log('Consultando clase actual para profesor:', numId);
+      const response = await fetch(`${API_URL}/api/professor/${numId}/current-class`);
       console.log('Status de la respuesta:', response.status);
       
       if (response.ok) {
         const data = await response.json();
         console.log('Datos de la clase actual:', data);
-        setCurrentClass(data);
+        if (data && data.modulo_id && data.seccion_id) {
+          setCurrentClass({
+            modulo_id: data.modulo_id,
+            seccion_id: data.seccion_id
+          });
+        } else {
+          setCurrentClass(null);
+        }
       } else if (response.status === 404) {
-        // No hay clase programada, lo cual es válido
         console.log('No hay clase programada en este momento');
         setCurrentClass(null);
       } else {
         const errorText = await response.text();
         console.error('Error al cargar la clase actual:', errorText);
+        setCurrentClass(null);
       }
     } catch (error) {
       console.error('Error al cargar la clase actual:', error);

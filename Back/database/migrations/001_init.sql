@@ -348,6 +348,7 @@ WHERE ra.AlumnoID = a.AlumnoID
 SELECT jsonb_agg(estudiante_data) INTO reporte
 FROM (
          SELECT
+             a.ID as estudiante_id,
              a.Nombre || ' ' || a.Apellido AS estudiante,
              jsonb_object_agg(to_char(m.Fecha, 'MM-DD'),
                               CASE
@@ -358,7 +359,7 @@ FROM (
                   JOIN Alumnos a ON a.ID = ra.AlumnoID
                   JOIN Modulos m ON m.ID = ra.ModuloID
          WHERE ra.SeccionID = seccion_id_input
-         GROUP BY a.ID
+         GROUP BY a.ID, a.Nombre, a.Apellido
          ORDER BY a.Nombre, a.Apellido
      ) AS estudiante_data;
 
