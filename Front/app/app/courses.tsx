@@ -7,7 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 
 const isWeb = Platform.OS === 'web';
-const API_URL = '192.168.99.124:8080';
+
+const API_URL = 'http://localhost:8088';
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface Course {

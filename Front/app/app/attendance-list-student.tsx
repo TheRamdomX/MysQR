@@ -5,7 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = '192.168.99.124:8080';
+
+const API_URL = 'http://localhost:8088';
+
 
 interface Attendance {
   [key: string]: string;

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 
-const API_URL = 'http://192.168.99.124:8088';
+const API_URL = 'http://localhost:8088';
 
 interface Attendance {
   [key: string]: string;
@@ -21,6 +21,8 @@ export default function AttendanceList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [editMode, setEditMode] = useState(false);
+  const [modifiedAttendance, setModifiedAttendance] = useState<{ [key: string]: Attendance }>({});
 
   useEffect(() => {
     const fetchAttendanceData = async () => {
@@ -49,6 +51,56 @@ export default function AttendanceList() {
     fetchAttendanceData();
   }, [courseId]);
 
+  const handleToggleAttendance = (studentName: string, date: string) => {
+    if (!editMode) return;
+
+    setModifiedAttendance(prev => {
+      const updatedAttendance = { ...prev };
+      if (!updatedAttendance[studentName]) {
+        updatedAttendance[studentName] = {};
+      }
+      updatedAttendance[studentName][date] =
+        updatedAttendance[studentName][date] === '🟢' ? '🔴' : '🟢';
+      return updatedAttendance;
+    });
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      for (const studentName in modifiedAttendance) {
+        for (const date in modifiedAttendance[studentName]) {
+          const isPresent = modifiedAttendance[studentName][date] === '🟢';
+          const student = students.find(s => s.estudiante === studentName);
+          if (student) {
+            const alumnoID = studentName;
+            const seccionID = courseId;
+            const moduloID = dates.indexOf(date) + 1;
+
+            await fetch(`${API_URL}/api/db/attendance/manual`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                AlumnoID: alumnoID,
+                SeccionID: seccionID,
+                ModuloID: moduloID,
+              }),
+            });
+          }
+        }
+      }
+      setEditMode(false);
+      setModifiedAttendance({});
+      await fetchAttendanceData();
+    } catch (error) {
+      console.error('Error al guardar cambios:', error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setModifiedAttendance({});
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -70,8 +122,8 @@ export default function AttendanceList() {
   }
 
   return (
-    <ProtectedRoute>
-    <View style={{ flex: 1 }}>
+
+    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={StylesHeader.header}>
         <TouchableOpacity onPress={() => router.push('/courses')} style={styles.backButton}>
           <Text style={styles.backButtonText}>{'< Volver'}</Text>
@@ -84,10 +136,31 @@ export default function AttendanceList() {
         <Text style={StylesHeader.headerText}>Lista de Asistencia</Text>
       </View>
 
-      <View style={styles.container}>
+      <View style={styles.mainContentRow}>
+        <View style={styles.cardsRow}>
+          <View style={styles.editButtonsContainer}>
+            {!editMode ? (
+              <TouchableOpacity style={styles.editButton} onPress={() => setEditMode(true)}>
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
+                  <Text style={styles.saveButtonText}>Guardar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleCancelEdit}>
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.containerCentered}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={styles.headerRow}>
+          <View style={styles.tableCard}>
+            <View style={styles.headerRowRounded}>
               <View style={[styles.cell, styles.nameCell]}>
                 <Text style={styles.headerText}>Estudiante</Text>
               </View>
@@ -106,9 +179,24 @@ export default function AttendanceList() {
                   </View>
                   {dates.map((date) => (
                     <View key={date} style={styles.cell}>
-                      <Text style={styles.attendanceText}>
-                        {student.asistencia[date] || '❌'}
-                      </Text>
+                      {editMode ? (
+                        <TouchableOpacity onPress={() => handleToggleAttendance(student.estudiante, date)}>
+                          <View
+                            style={
+                              modifiedAttendance[student.estudiante]?.[date] === '🟢' ||
+                              (!modifiedAttendance[student.estudiante]?.[date] && student.asistencia[date] === '🟢')
+                                ? styles.dotGreen
+                                : styles.dotRed
+                            }
+                          />
+                        </TouchableOpacity>
+                      ) : (
+                        student.asistencia[date] === '🟢' ? (
+                          <View style={styles.dotGreen} />
+                        ) : (
+                          <View style={styles.dotRed} />
+                        )
+                      )}
                     </View>
                   ))}
                 </View>
@@ -124,40 +212,48 @@ export default function AttendanceList() {
 
 const StylesHeader = StyleSheet.create({
   header: {
-    position: 'absolute',
-    top: 0,
     width: '100%',
-    height: 60,
+    height: 70,
     backgroundColor: '#8B0000',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingTop: 0,
   },
   headerText: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
   },
   
 });
 
 const styles = StyleSheet.create({
-  container: {
+  containerCentered: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#f5f5f5',
-    padding: 6,
-    marginTop: 60,
   },
-  image: {
-    width: 200,
-    height: 200,
-    marginRight: 12,
+  tableCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  headerRow: {
+  headerRowRounded: {
     flexDirection: 'row',
     backgroundColor: '#8B0000',
     paddingVertical: 6,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
   },
   row: {
     flexDirection: 'row',
@@ -182,8 +278,21 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 13,
   },
-  attendanceText: {
-    fontSize: 16,
+  dotGreen: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#388E3C',
+  },
+  dotRed: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F44336',
+    borderWidth: 2,
+    borderColor: '#B71C1C',
   },
   backButton: {
     marginRight: 10,
@@ -195,6 +304,45 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  editButton: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    alignSelf: 'center',
+  },
+  editButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  saveButton: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    alignSelf: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  cancelButton: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: '#F44336',
+    alignSelf: 'center',
+  },
+  cancelButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -231,4 +379,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-}); 
+});
+

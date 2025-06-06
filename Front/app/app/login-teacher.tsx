@@ -3,8 +3,7 @@ import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, P
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
-const API_URL = 'http://192.168.99.124:8088';
+const API_URL = 'http://localhost:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
