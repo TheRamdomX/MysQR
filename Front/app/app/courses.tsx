@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, FlatList, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 const isWeb = Platform.OS === 'web';
 const API_URL = 'http://192.168.225.9:8088';
@@ -44,99 +45,65 @@ export default function Courses() {
   const [estudiantes, setEstudiantes] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
+  const [seccionesAsignaturas, setSeccionesAsignaturas] = useState<SeccionAsignatura[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const storedData = await AsyncStorage.getItem('userData');
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          setUserData(parsedData);
-          // Cargar datos de la clase actual
-          await loadCurrentClass(parsedData.profesorId);
-          // Cargar secciones del profesor
-          await loadProfessorSections(parsedData.profesorId);
+        const userDataString = await AsyncStorage.getItem('userData');
+        if (userDataString) {
+          const parsedUserData = JSON.parse(userDataString);
+          setUserData(parsedUserData);
         }
       } catch (error) {
-        console.error('Error al cargar datos del usuario:', error);
+        console.error('Error loading user data:', error);
       }
     };
+
     loadUserData();
   }, []);
 
-  const loadProfessorSections = async (profesorId: string) => {
-    try {
-        const numId = parseInt(profesorId);
-        if (isNaN(numId)) {
-            console.error('ID de profesor inválido');
-            return;
-        }
-        console.log('Cargando secciones para profesor:', numId);
-        const response = await fetch(`${API_URL}/api/db/sections/professor/${numId}`);
-        console.log('Status de la respuesta:', response.status);
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${await response.text()}`);
-        }
-        const data: SeccionAsignatura[] = await response.json();
-        console.log('Datos de las secciones:', data);
-        const cursos = data.map(seccion => ({
-            id: seccion.seccion_id.toString(),
-            nombre: seccion.nombre,
-            cit: `CIT${seccion.asignatura_id}`,
-            asistencia: []
-        }));
-        
-        setCourses(cursos);
-    } catch (error) {
-        console.error('Error al cargar las secciones:', error);
-        // Mostrar mensaje de error al usuario
-    }
-};
-
-  const loadCurrentClass = async (profesorId: string) => {
-    try {
-      console.log('Consultando clase actual para profesor:', profesorId);
-      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${profesorId}`);
-      console.log('Status de la respuesta:', response.status);
+  useEffect(() => {
+    const loadCourses = async () => {
+      if (!userData) return;
       
-      if (response.ok) {
+      try {
+        const response = await fetch(`${API_URL}/api/qr/secciones/${userData.profesorId}`);
         const data = await response.json();
-        console.log('Datos de la clase actual:', data);
-        setCurrentClass(data);
-      } else if (response.status === 404) {
-        // No hay clase programada, lo cual es válido
-        console.log('No hay clase programada en este momento');
-        setCurrentClass(null);
-      } else {
-        const errorText = await response.text();
-        console.error('Error al cargar la clase actual:', errorText);
+        
+        if (response.ok) {
+          setSeccionesAsignaturas(data);
+        } else {
+          console.error('Error loading courses:', data.error);
+        }
+      } catch (error) {
+        console.error('Error loading courses:', error);
+      } finally {
+        setLoadingCourses(false);
       }
-    } catch (error) {
-      console.error('Error al cargar la clase actual:', error);
-      setCurrentClass(null);
-    }
-  };
+    };
 
-  const qrData = {
-    profesorid: userData?.profesorId,
-    moduloid: currentClass?.modulo_id,
-    seccionid: currentClass?.seccion_id,
-    FechaRegistro :new Date().toISOString()
-  };
+    loadCourses();
+  }, [userData]);
 
-  console.log('QR Data being generated:', qrData);
+  const handleQRPress = (seccion: SeccionAsignatura) => {
+    setCurrentClass({
+      modulo_id: 1,
+      seccion_id: seccion.seccion_id
+    });
+    setQrVisible(true);
+  };
 
   const addCourse = () => {
-    if (nombre) {
-      setCourses([
-        ...courses,
-        {
-          id: (courses.length + 1).toString(),
-          nombre,
-          cit,
-          asistencia: [],
-        },
-      ]);
+    if (nombre && cit && estudiantes) {
+      const newCourse: Course = {
+        id: Date.now().toString(),
+        nombre,
+        cit,
+        asistencia: []
+      };
+      setCourses([...courses, newCourse]);
       setNombre('');
       setCit('');
       setEstudiantes('');
@@ -144,80 +111,90 @@ export default function Courses() {
     }
   };
 
-  const renderItem = ({ item }: { item: Course }) => (
-    <View style={styles.card}>
-      <Text style={styles.title}>{item.nombre}</Text>
-      <Text style={styles.text}>Codigo: {item.cit}</Text>
-      <TouchableOpacity
-        style={styles.attendanceButton}
-        onPress={() => router.push(`/attendance-list?courseId=${item.id}`)}
-      >
-        <Text style={styles.attendanceButtonText}>Lista de asistencia</Text>
-      </TouchableOpacity>
-    </View>
+  const renderCourse = ({ item }: { item: SeccionAsignatura }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => router.push(`/attendance-list?seccionId=${item.seccion_id}&asignaturaId=${item.asignatura_id}`)}
+    >
+      <View style={styles.cardContent}>
+        <Text style={styles.title}>{item.nombre}</Text>
+        <Text style={styles.subtitle}>Sección: {item.seccion_id}</Text>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.attendanceButton}
+            onPress={() => router.push(`/attendance-list?seccionId=${item.seccion_id}&asignaturaId=${item.asignatura_id}`)}
+          >
+            <Text style={styles.attendanceButtonText}>Ver Asistencia</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qrButton}
+            onPress={() => handleQRPress(item)}
+          >
+            <Text style={styles.buttonText}>Generar QR</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
+  const generateQRData = () => {
+    if (!currentClass) return '';
+    
+    return JSON.stringify({
+      type: 'attendance',
+      modulo_id: currentClass.modulo_id,
+      seccion_id: currentClass.seccion_id,
+      timestamp: new Date().toISOString()
+    });
+  };
+
   return (
-    <View style={{ flex: 1 }}>
-      <View style={StylesHeader.header}>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={StylesHeader.headerText}>Tus Cursos</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => setQrVisible(true)}
-        >
-          <Text style={styles.buttonText}>Generar QR</Text>
-        </Pressable>
-      </View>
-
-      <Modal visible={qrVisible} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-          <View style={styles.qrModalContent}>
-            <TouchableOpacity
-              onPress={() => setQrVisible(false)}
-              style={styles.closeIcon}
-            >
-              <AntDesign name="close" size={35} color="#ffff" />
-            </TouchableOpacity>
-            {currentClass ? (
-              <>
-                {console.log('Current Class Data:', currentClass)}
-                <QRCode 
-                  value={JSON.stringify(qrData)}
-                  size={650}
-                  backgroundColor="white"
-                  color="black"
-                />
-              </>
-            ) : (
-              <Text style={styles.errorText}>No hay clase programada en este momento</Text>
-            )}
-          </View>
+    <ProtectedRoute allowedRoles={['profesor', 'teacher']}>
+      <View style={{ flex: 1 }}>
+        <View style={StylesHeader.header}>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <Text style={StylesHeader.headerText}>Tus Cursos</Text>
+          <Pressable
+            style={styles.logoutButton}
+            onPress={async () => {
+              await AsyncStorage.removeItem('userToken');
+              await AsyncStorage.removeItem('userData');
+              router.push('/role-select');
+            }}
+          >
+            <AntDesign name="logout" size={24} color="white" />
+          </Pressable>
         </View>
-      </Modal>  
 
-      <View style={styles.container}>
-        <FlatList
-          data={courses}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={Platform.OS === 'web' ? 3 : 1}
-          contentContainerStyle={styles.list}
-        />
+        <View style={{ flex: 1 }}>
+          {loadingCourses ? (
+            <View style={styles.loadingContainer}>
+              <Text>Cargando cursos...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={seccionesAsignaturas}
+              renderItem={renderCourse}
+              keyExtractor={item => `${item.seccion_id}-${item.asignatura_id}`}
+              contentContainerStyle={{ padding: 16 }}
+            />
+          )}
+        </View>
+
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
           <AntDesign name="pluscircle" size={56} color="#8B0000" />
         </TouchableOpacity>
 
-        <Modal visible={modalVisible} transparent animationType="slide">
+        <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Agregar Curso</Text>
+              <Text style={styles.modalTitle}>Agregar Nuevo Curso</Text>
               <TextInput
-                placeholder="Nombre"
+                placeholder="Nombre del curso"
                 value={nombre}
                 onChangeText={setNombre}
                 style={styles.input}
@@ -239,149 +216,209 @@ export default function Courses() {
                 <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
                   <Text style={styles.buttonText}>Agregar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.modalButton, { backgroundColor: '#666' }]}>
                   <Text style={styles.buttonText}>Cancelar</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
+
+        <Modal visible={qrVisible} animationType="slide" transparent>
+          <View style={styles.modalContainer}>
+            <View style={styles.qrModalContent}>
+              <Text style={styles.modalTitle}>Código QR de Asistencia</Text>
+              {currentClass && (
+                <View style={styles.qrContainer}>
+                  <QRCode
+                    value={generateQRData()}
+                    size={200}
+                    backgroundColor="white"
+                    color="black"
+                  />
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => setQrVisible(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.buttonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
-    </View>
+    </ProtectedRoute>
   );
 }
 
 const StylesHeader = StyleSheet.create({
   header: {
-    position: 'absolute',
-    top: 0,
-    width: '100%',
-    height: isWeb ? 90 : 80,
     backgroundColor: '#8B0000',
+    paddingTop: 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 16,
   },
   headerText: {
     color: '#fff',
-    fontSize: 30,
-    marginRight: '45%',
+    fontSize: 20,
     fontWeight: 'bold',
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5', padding: 10, marginTop: 90 },
-  list: { justifyContent: 'center' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   image: {
-    width: 250,
-    height: 250,
-    marginRight: 20,
+    width: 100,
+    height: 40,
+    resizeMode: 'contain',
+  },
+  card: {
+    backgroundColor: '#fff',
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  cardContent: {
+    padding: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#8B0000',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   attendanceButton: {
+    flex: 1,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  attendanceButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  qrButton: {
+    flex: 1,
     backgroundColor: '#8B0000',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
-    marginTop: 10,
-  },
-  attendanceButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: '#fff',
-    margin: 8,
-    borderRadius: 10,
-    padding: 14,
-    minWidth: isWeb ? (SCREEN_WIDTH < 600 ? '100%' : SCREEN_WIDTH < 900 ? '48%' : '31%') : '95%',
-    borderWidth: 3,
-    borderColor: '#8B0000',
-    elevation: 3,
     alignItems: 'center',
   },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#8B0000', marginBottom: 4 },
-  text: { fontSize: 14, marginBottom: 2 },
-  textSmall: { fontSize: 12, color: '#555' },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  buttonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  addButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 20,
+    backgroundColor: 'transparent',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 4,
+  },
+  logoutButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 6,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
-    width: 300,
-    alignItems: 'center',
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  input: {
-    width: '100%',
-    borderBottomWidth: 1,
-    borderColor: '#8B0000',
-    marginBottom: 12,
-    padding: 6,
-    fontSize: 16,
-  },
-  modalButtons: { flexDirection: 'row', marginTop: 12 },
-  modalButton: {
-    backgroundColor: '#8B0000',
-    padding: 10,
-    borderRadius: 8,
-    marginHorizontal: 8,
-  },
-  buttonText: {
-    color: 'black',
-    fontWeight: 'bold',
-    fontSize: 20,
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-  },
-  button: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 16,
-    top: 10,
-  },
-  buttonPressed: {
-    backgroundColor: '#c4b9b9',
-    transform: [{ scale: 1 }],
-  },
-  closeIcon: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 1,
-    padding: 6,
-    backgroundColor: '#8B0000',
-    borderRadius: 10,
+    width: '85%',
+    maxWidth: 400,
   },
   qrModalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
+    width: '85%',
+    maxWidth: 400,
   },
-  errorText: {
-    color: '#8B0000',
+  modalTitle: {
     fontSize: 18,
+    fontWeight: 'bold',
+    color: '#8B0000',
+    marginBottom: 16,
     textAlign: 'center',
-    marginTop: 20,
   },
-}); 
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    backgroundColor: '#8B0000',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  qrContainer: {
+    marginVertical: 20,
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    elevation: 2,
+  },
+  closeButton: {
+    backgroundColor: '#8B0000',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+});
