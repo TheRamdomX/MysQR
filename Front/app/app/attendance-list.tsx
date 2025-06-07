@@ -43,7 +43,7 @@ export default function AttendanceList() {
         // Mapea los datos para incluir estudiante_id
         const mappedData: Student[] = data.map((student: any) => ({
           estudiante: student.estudiante,
-          estudiante_id: student.estudiante_id, // <-- Asegúrate que el backend lo envía
+          estudiante_id: student.estudiante_id, 
           asistencia: student.asistencia,
         }));
         setStudents(mappedData);
