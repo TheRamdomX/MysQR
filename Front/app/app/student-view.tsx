@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 interface CourseInfo {
   name: string;
@@ -20,27 +21,29 @@ export default function StudentView() {
   });
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{courseInfo.name}</Text>
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>Teacher:</Text>
-        <Text style={styles.value}>{courseInfo.teacher}</Text>
+    <ProtectedRoute allowedRoles={['alumno', 'student']}>
+      <View style={styles.container}>
+        <Text style={styles.title}>{courseInfo.name}</Text>
+        <View style={styles.infoContainer}>
+          <Text style={styles.label}>Teacher:</Text>
+          <Text style={styles.value}>{courseInfo.teacher}</Text>
+        </View>
+        <View style={styles.infoContainer}>
+          <Text style={styles.label}>Schedule:</Text>
+          <Text style={styles.value}>{courseInfo.schedule}</Text>
+        </View>
+        <View style={styles.infoContainer}>
+          <Text style={styles.label}>Location:</Text>
+          <Text style={styles.value}>{courseInfo.location}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => router.push(`/attendance-list-student?courseId=${courseId}` as any)}
+        >
+          <Text style={styles.buttonText}>View Attendance</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>Schedule:</Text>
-        <Text style={styles.value}>{courseInfo.schedule}</Text>
-      </View>
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>Location:</Text>
-        <Text style={styles.value}>{courseInfo.location}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push(`/attendance-list-student?courseId=${courseId}`)}
-      >
-        <Text style={styles.buttonText}>View Attendance</Text>
-      </TouchableOpacity>
-    </View>
+    </ProtectedRoute>
   );
 }
 

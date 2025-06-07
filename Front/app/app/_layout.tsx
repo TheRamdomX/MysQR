@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { AuthProvider } from '../context/AuthContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -13,30 +14,36 @@ export default function RootLayout() {
   });
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName="index">
-        <Stack.Screen 
-          name="index" 
-          options={{ 
-            headerShown: false,
-            animation: 'none'
-          }} 
-        />
-        <Stack.Screen name="role-select" options={{ headerShown: false }} />
-        <Stack.Screen name="login-student" options={{ headerShown: false }} />
-        <Stack.Screen name="login-teacher" options={{ headerShown: false }} />
-        <Stack.Screen name="courses" options={{ headerShown: false }} />
-        <Stack.Screen name="student-courses" options={{ headerShown: false }} />
-        <Stack.Screen name="student-view" options={{ headerShown: false }} />
-        <Stack.Screen name="attendance-list" options={{ headerShown: false }} />
-        <Stack.Screen name="attendance-list-student" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack initialRouteName="index">
+          {/* Public Routes - Only accessible when NOT authenticated */}
+          <Stack.Screen 
+            name="index" 
+            options={{ 
+              headerShown: false,
+              animation: 'none'
+            }}
+          />
+          <Stack.Screen name="role-select" options={{ headerShown: false }} />
+          <Stack.Screen name="login-student" options={{ headerShown: false }} />
+          <Stack.Screen name="login-teacher" options={{ headerShown: false }} />
+          
+          {/* Teacher Routes - Only accessible by teachers */}
+          <Stack.Screen name="courses" options={{ headerShown: false }} />
+          <Stack.Screen name="attendance-list" options={{ headerShown: false }} />
+          
+          {/* Student Routes - Only accessible by students */}
+          <Stack.Screen name="student-courses" options={{ headerShown: false }} />
+          <Stack.Screen name="student-view" options={{ headerShown: false }} />
+          <Stack.Screen name="attendance-list-student" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

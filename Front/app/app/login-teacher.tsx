@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState } from 'react';
+import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import PublicRoute from '../components/PublicRoute';
+import { useAuth } from '../context/AuthContext';
 
 // Cambiamos localhost por la IP de tu computadora en la red local
 const API_URL = 'http://192.168.225.9:8088';
@@ -9,9 +10,17 @@ const API_URL = 'http://192.168.225.9:8088';
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
+    const { login } = useAuth();
 
     const handleLogin = async () => {
+        if (!usuario.trim() || !contrasena.trim()) {
+            Alert.alert('Error', 'Por favor, complete todos los campos.');
+            return;
+        }
+
+        setIsLoading(true);
         try {
             console.log('Intentando conectar a:', `${API_URL}/api/qr/login`);
             const response = await fetch(`${API_URL}/api/qr/login`, {
@@ -40,14 +49,17 @@ export default function LoginScreen() {
             }
 
             if (response.ok) {
-                // Guardar el token y la información del usuario
-                await AsyncStorage.setItem('userToken', data.token);
-                await AsyncStorage.setItem('userData', JSON.stringify({
+                const userData = {
                     id: data.id,
                     rol: data.rol,
                     rut: data.rut,
                     profesorId: data.profesor_id
-                }));
+                };
+
+                await login(data.token, userData);
+                
+                setUsuario('');
+                setContrasena('');
                 
                 router.push('/courses');
             } else {
@@ -55,18 +67,21 @@ export default function LoginScreen() {
             }
         } catch (error) {
             console.error('Error de login:', error);
-            Alert.alert('Error', 'Error al conectar con el servidor. Por favor, intente nuevamente.');
+            Alert.alert('Error', 'Error durante el proceso de autenticación. Por favor, intente nuevamente.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <ImageBackground
-            source={{ uri: 'https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2020/08/2876_DSC_0005-1-scaled.jpg' }}
-            style={styles.background}
-            resizeMode="cover"
-        >
-            <View style={styles.overlay} />
-            <View style={styles.container}>
+        <PublicRoute>
+            <ImageBackground
+                source={{ uri: 'https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2020/08/2876_DSC_0005-1-scaled.jpg' }}
+                style={styles.background}
+                resizeMode="cover"
+            >
+                <View style={styles.overlay} />
+                <View style={styles.container}>
                 <View style={styles.card}>
                     <Text style={styles.title}>Iniciar Sesión Profesor</Text>
                     <TextInput
@@ -82,12 +97,19 @@ export default function LoginScreen() {
                         onChangeText={setContrasena}
                         secureTextEntry
                     />
-                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                        <Text style={styles.loginButtonText}>Ingresar</Text>
+                    <TouchableOpacity 
+                        style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+                        onPress={handleLogin}
+                        disabled={isLoading}
+                    >
+                        <Text style={styles.loginButtonText}>
+                            {isLoading ? 'Ingresando...' : 'Ingresar'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
         </ImageBackground>
+        </PublicRoute>
     );
 }
 
@@ -130,6 +152,9 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    loginButtonDisabled: {
+        backgroundColor: '#ccc',
     },
     link: { color:'#1976D2', marginTop:15 }
 }); 

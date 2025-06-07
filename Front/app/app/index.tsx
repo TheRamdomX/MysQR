@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Pressable, Image, Animated, ViewStyle, TextStyle } from 'react-native';
 import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import PublicRoute from '../components/PublicRoute';
 
 interface MyButtonProps {
   title: string;
@@ -69,45 +70,47 @@ export default function HomeScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <View style={StylesHeader.header}>
-        <Text style={StylesHeader.headerText}></Text>
-      </View>
+    <PublicRoute>
+      <View style={styles.container}>
+        <View style={StylesHeader.header}>
+          <Text style={StylesHeader.headerText}></Text>
+        </View>
 
-      <Image
-        source={{ uri: 'https://ambientesdigital.com/wp-content/uploads/2017/03/udp-logo.jpg' }}
-        style={styles.image}
-        resizeMode="contain"
-      />
-
-      <View style={styles.textContainer}>
-        <Animated.Text 
-          style={[
-            styles.welcomeText, 
-            { 
-              opacity: fadeAnim,
-              textAlign: 'center',
-            }
-          ]}
-          numberOfLines={1}
-        >
-          {displayedText}
-          <Text style={{ 
-            opacity: displayedText.length === fullText.length ? 0 : 1,
-            color: 'black' 
-          }}>|</Text>
-        </Animated.Text>
-      </View>
-
-      <View style={styles.bottomSection}>
-        <MyButton 
-          title="Comenzar" 
-          onPress={() => router.push('/role-select')} 
+        <Image
+          source={{ uri: 'https://ambientesdigital.com/wp-content/uploads/2017/03/udp-logo.jpg' }}
+          style={styles.image}
+          resizeMode="contain"
         />
-      </View>
 
-      <View style={StylesFooter.footer}></View>
-    </View>
+        <View style={styles.textContainer}>
+          <Animated.Text 
+            style={[
+              styles.welcomeText, 
+              { 
+                opacity: fadeAnim,
+                textAlign: 'center',
+              }
+            ]}
+            numberOfLines={1}
+          >
+            {displayedText}
+            <Text style={{ 
+              opacity: displayedText.length === fullText.length ? 0 : 1,
+              color: 'black' 
+            }}>|</Text>
+          </Animated.Text>
+        </View>
+
+        <View style={styles.bottomSection}>
+          <MyButton 
+            title="Comenzar" 
+            onPress={() => router.push('/role-select' as any)} 
+          />
+        </View>
+
+        <View style={StylesFooter.footer}></View>
+      </View>
+    </PublicRoute>
   );
 }
 

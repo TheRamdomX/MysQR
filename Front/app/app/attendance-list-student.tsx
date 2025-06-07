@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -179,7 +180,8 @@ export default function AttendanceListStudent() {
   const porcentaje = totalClases > 0 ? Math.round((asistencias / totalClases) * 100) : 0;
 
   return (
-    <View style={styles.mainContainer}>
+    <ProtectedRoute allowedRoles={['alumno', 'student']}>
+      <View style={styles.mainContainer}>
       <View style={styles.header}>
         {isWeb && (
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -219,6 +221,7 @@ export default function AttendanceListStudent() {
         </View>
       </View>
     </View>
+    </ProtectedRoute>
   );
 }
 
