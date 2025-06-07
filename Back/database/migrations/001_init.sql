@@ -350,11 +350,17 @@ FROM (
          SELECT
              a.ID as estudiante_id,
              a.Nombre || ' ' || a.Apellido AS estudiante,
-             jsonb_object_agg(to_char(m.Fecha, 'MM-DD'),
-                              CASE
-                                  WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
-                                  ELSE '🔴'
-                                  END ORDER BY m.Fecha) AS asistencia
+             jsonb_object_agg(
+                 to_char(m.Fecha, 'MM-DD'),
+                 jsonb_build_object(
+                     'estado', CASE
+                         WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
+                         ELSE '🔴'
+                     END,
+                     'alumno_id', a.ID,
+                     'modulo_id', m.ID
+                 ) ORDER BY m.Fecha
+             ) AS asistencia
          FROM ReporteAsistencia ra
                   JOIN Alumnos a ON a.ID = ra.AlumnoID
                   JOIN Modulos m ON m.ID = ra.ModuloID

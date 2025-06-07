@@ -6,11 +6,16 @@ import ProtectedRoute from '../components/ProtectedRoute';
 const API_URL = 'http://localhost:8088';
 
 interface Attendance {
-  [key: string]: string;
+  [key: string]: {
+    estado: string;
+    alumno_id: number;
+    modulo_id: number;
+  };
 }
 
 interface Student {
   estudiante: string;
+  estudiante_id: number;
   asistencia: Attendance;
 }
 
@@ -34,12 +39,18 @@ export default function AttendanceList() {
         if (!response.ok) {
           throw new Error('Error al cargar los datos de asistencia');
         }
-        const data: Student[] = await response.json();
-        setStudents(data);
+        const data: any[] = await response.json();
+        // Mapea los datos para incluir estudiante_id
+        const mappedData: Student[] = data.map((student: any) => ({
+          estudiante: student.estudiante,
+          estudiante_id: student.estudiante_id, // <-- Asegúrate que el backend lo envía
+          asistencia: student.asistencia,
+        }));
+        setStudents(mappedData);
 
         // Extraer todas las fechas únicas de las asistencias
         const uniqueDates = new Set<string>();
-        data.forEach(student => {
+        mappedData.forEach(student => {
           Object.keys(student.asistencia).forEach(date => uniqueDates.add(date));
         });
         setDates(Array.from(uniqueDates).sort());
@@ -60,7 +71,7 @@ export default function AttendanceList() {
     students.forEach((student) => {
       dates.forEach((date) => {
         total++;
-        if (student.asistencia[date] === '🟢') {
+        if (student.asistencia[date]?.estado === '🟢') {
           presentes++;
         }
       });
@@ -80,7 +91,10 @@ export default function AttendanceList() {
       const newData = [...prev];
       const student = { ...newData[studentIdx] };
       const asistencia = { ...student.asistencia };
-      asistencia[date] = asistencia[date] && asistencia[date] !== '❌' && asistencia[date] !== '🔴' ? '🔴' : '🟢';
+      asistencia[date] = {
+        ...asistencia[date],
+        estado: asistencia[date]?.estado && asistencia[date]?.estado !== '❌' && asistencia[date]?.estado !== '🔴' ? '🔴' : '🟢'
+      };
       student.asistencia = asistencia;
       newData[studentIdx] = student;
       return newData;
@@ -105,20 +119,35 @@ export default function AttendanceList() {
       if (editedAttendance) {
         for (const student of editedAttendance) {
           for (const date in student.asistencia) {
-            const isPresent = student.asistencia[date] === '🟢';
-            const alumnoID = student.estudiante;
-            const seccionID = courseId;
-            const moduloID = dates.indexOf(date) + 1;
+            const asistenciaData = student.asistencia[date];
+            const isPresent = asistenciaData.estado === '🟢';
+            
+            // Solo enviar al backend si el estado ha cambiado
+            if (isPresent) {
+              const requestData = {
+                alumno_id: Number(asistenciaData.alumno_id),
+                seccion_id: Number(courseId),
+                modulo_id: Number(asistenciaData.modulo_id)
+              };
 
-            await fetch(`${API_URL}/api/db/attendance/manual`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                AlumnoID: alumnoID,
-                SeccionID: seccionID,
-                ModuloID: moduloID,
-              }),
-            });
+              console.log('Enviando datos:', requestData);
+
+              const response = await fetch(`${API_URL}/api/db/attendance/manual`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData),
+              });
+
+              if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(`Error al guardar asistencia: ${errorData}`);
+              }
+
+              console.log('Registro de asistencia exitoso:', {
+                ...requestData,
+                estado: asistenciaData.estado
+              });
+            }
           }
         }
         setStudents(editedAttendance);
@@ -127,6 +156,7 @@ export default function AttendanceList() {
       setEditedAttendance(null);
     } catch (error) {
       console.error('Error al guardar cambios:', error);
+      // Aquí podrías agregar un mensaje de error para el usuario
     }
   };
 
@@ -224,7 +254,7 @@ export default function AttendanceList() {
                               <Text style={styles.tooltipText}>
                                 {(() => {
                                   const total = dates.length;
-                                  const presentes = dates.filter(date => student.asistencia[date] === '🟢').length;
+                                  const presentes = dates.filter(date => student.asistencia[date]?.estado === '🟢').length;
                                   return total === 0 ? '0%' : `${Math.round((presentes / total) * 100)}% asistencia`;
                                 })()}
                               </Text>
@@ -241,10 +271,10 @@ export default function AttendanceList() {
                       <View key={date} style={styles.cell}>
                         {editMode ? (
                           <TouchableOpacity onPress={() => handleToggleAttendance(studentIdx, date)}>
-                            <View style={student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? styles.dotGreen : styles.dotRed} />
+                            <View style={student.asistencia[date]?.estado && student.asistencia[date]?.estado !== '❌' && student.asistencia[date]?.estado !== '🔴' ? styles.dotGreen : styles.dotRed} />
                           </TouchableOpacity>
                         ) : (
-                          student.asistencia[date] && student.asistencia[date] !== '❌' && student.asistencia[date] !== '🔴' ? (
+                          student.asistencia[date]?.estado && student.asistencia[date]?.estado !== '❌' && student.asistencia[date]?.estado !== '🔴' ? (
                             <View style={styles.dotGreen} />
                           ) : (
                             <View style={styles.dotRed} />
