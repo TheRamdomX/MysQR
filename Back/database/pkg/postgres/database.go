@@ -139,12 +139,12 @@ func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID, moduloID int) 
 }
 
 // 4.1. Registro en Asistencia manual
-func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID, ProfesorID int) error {
+func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID int) error {
 	query := `
-		INSERT INTO Asistencia (AlumnoID, SeccionID, ProfesorID, ModuloID, FechaRegistro, ManualInd)
-		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 1)
+		INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
 	`
-	_, err := s.db.Exec(query, alumnoID, seccionID, ProfesorID, moduloID)
+	_, err := s.db.Exec(query, alumnoID, seccionID, moduloID)
 	return err
 }
 

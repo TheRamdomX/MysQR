@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Image, Dimensions, Platform } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ProtectedRoute from '../components/ProtectedRoute';
+import { useAuth } from '../context/AuthContext';
+import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.225.9:8088';
+const API_URL = 'http://localhost:8088';
 
 interface Course {
   id: string;
@@ -30,58 +32,67 @@ interface SeccionAsignatura {
   nombre: string;
 }
 
+const decryptQRData = (encryptedData: string) => {
+  try {
+    const key = "32-byte-long-secret-key-12345678";
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
+    const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
+    return JSON.parse(decryptedString);
+  } catch (error) {
+    console.error('Error decrypting QR data:', error);
+    return null;
+  }
+};
+
 export default function CoursesStudent() {
   const router = useRouter();
+  const { logout, userData } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
   const [hora, setHora] = useState('');
   const [scanned, setScanned] = useState(false);
   const [scannedData, setScannedData] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
-  const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadStudentSections = async () => {
+      if (!userData?.alumnoId) return;
+      
       try {
-        const storedData = await AsyncStorage.getItem('userData');
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          setUserData(parsedData);
-          // Cargar secciones del alumno
-          await loadStudentSections(parsedData.alumnoId);
+        const numId = parseInt(userData.alumnoId.toString());
+        if (isNaN(numId)) {
+          console.error('ID de alumno inválido');
+          return;
         }
+        console.log('Cargando secciones para alumno:', numId);
+        const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
+        console.log('Status de la respuesta:', response.status);
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${await response.text()}`);
+        }
+        const data: SeccionAsignatura[] = await response.json();
+        console.log('Datos de las secciones:', data);
+        const cursos = data.map(seccion => ({
+          id: seccion.seccion_id.toString(),
+          nombre: seccion.nombre,
+          cit: `CIT${seccion.asignatura_id}`,
+          asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
+        }));
+        
+        setCourses(cursos);
       } catch (error) {
-        console.error('Error al cargar datos del usuario:', error);
+        console.error('Error al cargar las secciones:', error);
       }
     };
-    loadUserData();
-  }, []);
+    loadStudentSections();
+  }, [userData]);
 
-  const loadStudentSections = async (alumnoId: string) => {
+  const handleLogout = async () => {
     try {
-      const numId = parseInt(alumnoId);
-      if (isNaN(numId)) {
-        console.error('ID de alumno inválido');
-        return;
-      }
-      console.log('Cargando secciones para alumno:', numId);
-      const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
-      console.log('Status de la respuesta:', response.status);
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${await response.text()}`);
-      }
-      const data: SeccionAsignatura[] = await response.json();
-      console.log('Datos de las secciones:', data);
-      const cursos = data.map(seccion => ({
-        id: seccion.seccion_id.toString(),
-        nombre: seccion.nombre,
-        cit: `CIT${seccion.asignatura_id}`,
-        asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
-      }));
-      
-      setCourses(cursos);
+      await logout();
+      router.replace('/login-student');
     } catch (error) {
-      console.error('Error al cargar las secciones:', error);
+      console.error('Error during logout:', error);
     }
   };
 
@@ -109,9 +120,13 @@ export default function CoursesStudent() {
       setScanned(true);
       setScannedData(data);
       
-      // Parsear los datos del QR
-      const qrData = JSON.parse(data);
-      console.log('QR Data parsed:', qrData);
+      // Desencriptar los datos del QR
+      const qrData = decryptQRData(data);
+      if (!qrData) {
+        console.error('Error al desencriptar QR');
+        return;
+      }
+      console.log('QR Data decrypted:', qrData);
 
       // Verificar que tenemos todos los datos necesarios
       if (!qrData.moduloid || !qrData.seccionid) {
@@ -144,7 +159,6 @@ export default function CoursesStudent() {
       setQrVisible(false);
     } catch (error) {
       console.error('Error al procesar el QR:', error);
-      // Aquí podrías mostrar un mensaje de error al usuario
     }
   };
 
@@ -173,77 +187,73 @@ export default function CoursesStudent() {
   };
 
   return (
-    <View style={styles.mainContainer}>
-      <View style={styles.header}>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerText}>Tus Cursos</Text>
-        <View style={styles.horaContainer}>
-          <Text style={styles.horaText}>{hora}</Text>
+    <ProtectedRoute allowedRoles={['alumno', 'student']}>
+      <View style={styles.mainContainer}>
+        <View style={styles.header}>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <Text style={styles.headerText}>Tus Cursos</Text>
+          <View style={styles.horaContainer}>
+            <Text style={styles.horaText}>{hora}</Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.container}>
-        <FlatList
-          data={courses}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={getNumColumns()}
-          contentContainerStyle={styles.list}
-        />
-      </View>
-      <TouchableOpacity
-        style={styles.qrButton}
-        onPress={() => {
-          setScanned(false);
-          setScannedData('');
-          setQrVisible(true);
-        }}
-      >
-        <Text style={styles.qrButtonText}>Escanear QR</Text>
-      </TouchableOpacity>
-      <Modal visible={qrVisible} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-        <View style={styles.qrModalContent}>
-  <TouchableOpacity style={styles.closeIcon} onPress={() => setQrVisible(false)}>
-    <AntDesign name="close" size={35} color="#fff" />
-  </TouchableOpacity>
-  {!permission ? (
-    <View style={styles.permissionContainer}>
-      <Text style={styles.permissionText}>Loading...</Text>
-    </View>
-  ) : !permission.granted ? (
-    <View style={styles.permissionContainer}>
-      <Text style={styles.permissionText}>We need your permission to show the camera</Text>
-      <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-        <Text style={styles.permissionButtonText}>Grant Permission</Text>
-      </TouchableOpacity>
-    </View>
-  ) : (
-    <View style={styles.scannerContainer}>
-      <View style={styles.cameraContainer}>
-        <CameraView
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-          style={styles.camera}
-        />
-      </View>
-      <View style={styles.overlay}>
-        <View style={styles.scanFrame} />
-      </View>
-      {scanned && (
-        <TouchableOpacity style={styles.scanAgainButton} onPress={() => setScanned(false)}>
-          <Text style={styles.scanAgainButtonText}>Tap to Scan Again</Text>
+        <View style={styles.container}>
+          <FlatList
+            data={courses}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            numColumns={getNumColumns()}
+            contentContainerStyle={styles.list}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.qrButton}
+          onPress={() => {
+            setScanned(false);
+            setScannedData('');
+            setQrVisible(true);
+          }}
+        >
+          <Text style={styles.qrButtonText}>Escanear QR</Text>
         </TouchableOpacity>
-      )}
-    </View>
-  )}
-</View>
-        </View>
-      </Modal>
-    </View>
+        <Modal visible={qrVisible} transparent animationType="fade">
+          <View style={styles.modalContainer}>
+            <View style={styles.qrModalContent}>
+              <TouchableOpacity style={styles.closeIcon} onPress={() => setQrVisible(false)}>
+                <AntDesign name="close" size={35} color="#fff" />
+              </TouchableOpacity>
+              {!permission ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={styles.permissionText}>Loading...</Text>
+                </View>
+              ) : !permission.granted ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={styles.permissionText}>We need your permission to show the camera</Text>
+                  <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                    <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <CameraView
+                  style={styles.camera}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['qr'],
+                  }}
+                  onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                >
+                  <View style={styles.overlay}>
+                    <View style={styles.scanFrame} />
+                  </View>
+                </CameraView>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </ProtectedRoute>
   );
 }
 
@@ -265,21 +275,18 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 1,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   headerText: {
     color: '#fff',
     fontSize: isWeb ? 26 : 22,
     fontWeight: 'bold',
-    marginLeft: isWeb ? SCREEN_WIDTH * 0.25 : SCREEN_WIDTH * 0.025,
-  },
-  container: {
-    paddingTop: isWeb ? 25 : 32,
-    backgroundColor: '#f5f5f5',
-    padding: SCREEN_WIDTH * 0.02,
-    marginTop: isWeb ? 80 : 60,
-  },
-  list: {
-    justifyContent: 'center',
-    paddingBottom: isWeb ? 100 : 80,
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: -50 }],
   },
   horaContainer: {
     position: 'absolute',
@@ -302,6 +309,16 @@ const styles = StyleSheet.create({
     width: isWeb ? 300 : 100,
     height: isWeb ? 300 : 250,
     marginRight: SCREEN_WIDTH * 0.02,
+  },
+  container: {
+    paddingTop: isWeb ? 25 : 32,
+    backgroundColor: '#f5f5f5',
+    padding: SCREEN_WIDTH * 0.02,
+    marginTop: isWeb ? 80 : 60,
+  },
+  list: {
+    justifyContent: 'center',
+    paddingBottom: isWeb ? 100 : 80,
   },
   card: {
     flex: 1,
@@ -455,5 +472,10 @@ const styles = StyleSheet.create({
   scanAgainButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
 });

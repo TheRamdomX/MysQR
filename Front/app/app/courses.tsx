@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import ProtectedRoute from '../components/ProtectedRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
+import CryptoJS from 'crypto-js';
 
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.225.9:8088';
+
+const API_URL = 'http://localhost:8088';
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface Course {
@@ -34,6 +38,13 @@ interface SeccionAsignatura {
   nombre: string;
 }
 
+const encryptQRData = (data: any) => {
+  const key = "32-byte-long-secret-key-12345678";
+  const jsonString = JSON.stringify(data);
+  const encrypted = CryptoJS.AES.encrypt(jsonString, key).toString();
+  return encrypted;
+};
+
 export default function Courses() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -44,6 +55,7 @@ export default function Courses() {
   const [estudiantes, setEstudiantes] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
+  const [qrData, setQrData] = useState<string>('');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -63,6 +75,21 @@ export default function Courses() {
     };
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newQrData = {
+        profesorid: userData?.profesorId,
+        moduloid: currentClass?.modulo_id,
+        seccionid: currentClass?.seccion_id,
+        FechaRegistro: new Date().toISOString()
+      };
+      const encryptedData = encryptQRData(newQrData);
+      setQrData(encryptedData);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [userData, currentClass]);
 
   const loadProfessorSections = async (profesorId: string) => {
     try {
@@ -95,33 +122,39 @@ export default function Courses() {
 
   const loadCurrentClass = async (profesorId: string) => {
     try {
-      console.log('Consultando clase actual para profesor:', profesorId);
-      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${profesorId}`);
+      const numId = parseInt(profesorId);
+      if (isNaN(numId)) {
+        console.error('ID de profesor inválido');
+        return;
+      }
+      
+      console.log('Consultando clase actual para profesor:', numId);
+      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${numId}`);
       console.log('Status de la respuesta:', response.status);
       
       if (response.ok) {
         const data = await response.json();
         console.log('Datos de la clase actual:', data);
-        setCurrentClass(data);
+        if (data && data.modulo_id && data.seccion_id) {
+          setCurrentClass({
+            modulo_id: data.modulo_id,
+            seccion_id: data.seccion_id
+          });
+        } else {
+          setCurrentClass(null);
+        }
       } else if (response.status === 404) {
-        // No hay clase programada, lo cual es válido
         console.log('No hay clase programada en este momento');
         setCurrentClass(null);
       } else {
         const errorText = await response.text();
         console.error('Error al cargar la clase actual:', errorText);
+        setCurrentClass(null);
       }
     } catch (error) {
       console.error('Error al cargar la clase actual:', error);
       setCurrentClass(null);
     }
-  };
-
-  const qrData = {
-    profesorid: userData?.profesorId,
-    moduloid: currentClass?.modulo_id,
-    seccionid: currentClass?.seccion_id,
-    FechaRegistro :new Date().toISOString()
   };
 
   console.log('QR Data being generated:', qrData);
@@ -158,96 +191,102 @@ export default function Courses() {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={StylesHeader.header}>
-        <Image
-          source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={StylesHeader.headerText}>Tus Cursos</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => setQrVisible(true)}
-        >
-          <Text style={styles.buttonText}>Generar QR</Text>
-        </Pressable>
-      </View>
-
-      <Modal visible={qrVisible} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-          <View style={styles.qrModalContent}>
-            <TouchableOpacity
-              onPress={() => setQrVisible(false)}
-              style={styles.closeIcon}
-            >
-              <AntDesign name="close" size={35} color="#ffff" />
-            </TouchableOpacity>
-            {currentClass ? (
-              <>
-                {console.log('Current Class Data:', currentClass)}
-                <QRCode 
-                  value={JSON.stringify(qrData)}
-                  size={650}
-                  backgroundColor="white"
-                  color="black"
-                />
-              </>
-            ) : (
-              <Text style={styles.errorText}>No hay clase programada en este momento</Text>
-            )}
-          </View>
+    <ProtectedRoute>
+      <View style={{ flex: 1 }}>
+        <View style={StylesHeader.header}>
+          <Image
+            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png' }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <Text style={StylesHeader.headerText}>Tus Cursos</Text>
+          <Pressable
+            style={styles.button}
+            onPress={() => setQrVisible(true)}
+          >
+            <Text style={styles.buttonText}>Generar QR</Text>
+          </Pressable>
         </View>
-      </Modal>  
 
-      <View style={styles.container}>
-        <FlatList
-          data={courses}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={Platform.OS === 'web' ? 3 : 1}
-          contentContainerStyle={styles.list}
-        />
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <AntDesign name="pluscircle" size={56} color="#8B0000" />
-        </TouchableOpacity>
-
-        <Modal visible={modalVisible} transparent animationType="slide">
+        <Modal visible={qrVisible} transparent animationType="fade">
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Agregar Curso</Text>
-              <TextInput
-                placeholder="Nombre"
-                value={nombre}
-                onChangeText={setNombre}
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="CIT"
-                value={cit}
-                onChangeText={setCit}
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="Estudiantes"
-                value={estudiantes}
-                onChangeText={setEstudiantes}
-                keyboardType="numeric"
-                style={styles.input}
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
-                  <Text style={styles.buttonText}>Agregar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
-                  <Text style={styles.buttonText}>Cancelar</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.qrModalContent}>
+              <TouchableOpacity
+                onPress={() => setQrVisible(false)}
+                style={styles.closeIcon}
+              >
+                <AntDesign name="close" size={35} color="#ffff" />
+              </TouchableOpacity>
+              {currentClass ? (
+                <>
+                  {console.log('Current Class Data:', currentClass)}
+                  {qrData ? (
+                    <QRCode 
+                      value={qrData}
+                      size={650}
+                      backgroundColor="white"
+                      color="black"
+                    />
+                  ) : (
+                    <Text style={styles.errorText}>Generando código QR...</Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.errorText}>No hay clase programada en este momento</Text>
+              )}
             </View>
           </View>
-        </Modal>
+        </Modal>  
+
+        <View style={styles.container}>
+          <FlatList
+            data={courses}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            numColumns={Platform.OS === 'web' ? 3 : 1}
+            contentContainerStyle={styles.list}
+          />
+          <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+            <AntDesign name="pluscircle" size={56} color="#8B0000" />
+          </TouchableOpacity>
+
+          <Modal visible={modalVisible} transparent animationType="slide">
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Agregar Curso</Text>
+                <TextInput
+                  placeholder="Nombre"
+                  value={nombre}
+                  onChangeText={setNombre}
+                  style={styles.input}
+                />
+                <TextInput
+                  placeholder="CIT"
+                  value={cit}
+                  onChangeText={setCit}
+                  style={styles.input}
+                />
+                <TextInput
+                  placeholder="Estudiantes"
+                  value={estudiantes}
+                  onChangeText={setEstudiantes}
+                  keyboardType="numeric"
+                  style={styles.input}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
+                    <Text style={styles.buttonText}>Agregar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
+                    <Text style={styles.buttonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </View>
       </View>
-    </View>
+    </ProtectedRoute>
   );
 }
 
