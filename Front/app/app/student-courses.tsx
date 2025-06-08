@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
+import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -30,6 +31,18 @@ interface SeccionAsignatura {
   asignatura_id: number;
   nombre: string;
 }
+
+const decryptQRData = (encryptedData: string) => {
+  try {
+    const key = "32-byte-long-secret-key-12345678";
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
+    const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
+    return JSON.parse(decryptedString);
+  } catch (error) {
+    console.error('Error decrypting QR data:', error);
+    return null;
+  }
+};
 
 export default function CoursesStudent() {
   const router = useRouter();
@@ -107,9 +120,13 @@ export default function CoursesStudent() {
       setScanned(true);
       setScannedData(data);
       
-      // Parsear los datos del QR
-      const qrData = JSON.parse(data);
-      console.log('QR Data parsed:', qrData);
+      // Desencriptar los datos del QR
+      const qrData = decryptQRData(data);
+      if (!qrData) {
+        console.error('Error al desencriptar QR');
+        return;
+      }
+      console.log('QR Data decrypted:', qrData);
 
       // Verificar que tenemos todos los datos necesarios
       if (!qrData.moduloid || !qrData.seccionid) {
@@ -142,7 +159,6 @@ export default function CoursesStudent() {
       setQrVisible(false);
     } catch (error) {
       console.error('Error al procesar el QR:', error);
-      // Aquí podrías mostrar un mensaje de error al usuario
     }
   };
 

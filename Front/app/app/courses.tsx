@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
+import CryptoJS from 'crypto-js';
 
 const isWeb = Platform.OS === 'web';
 
@@ -37,6 +38,13 @@ interface SeccionAsignatura {
   nombre: string;
 }
 
+const encryptQRData = (data: any) => {
+  const key = "32-byte-long-secret-key-12345678";
+  const jsonString = JSON.stringify(data);
+  const encrypted = CryptoJS.AES.encrypt(jsonString, key).toString();
+  return encrypted;
+};
+
 export default function Courses() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,12 +55,7 @@ export default function Courses() {
   const [estudiantes, setEstudiantes] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
-  const [qrData, setQrData] = useState({
-    profesorid: userData?.profesorId,
-    moduloid: currentClass?.modulo_id,
-    seccionid: currentClass?.seccion_id,
-    FechaRegistro: new Date().toISOString()
-  });
+  const [qrData, setQrData] = useState<string>('');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -75,12 +78,14 @@ export default function Courses() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setQrData({
+      const newQrData = {
         profesorid: userData?.profesorId,
         moduloid: currentClass?.modulo_id,
         seccionid: currentClass?.seccion_id,
         FechaRegistro: new Date().toISOString()
-      });
+      };
+      const encryptedData = encryptQRData(newQrData);
+      setQrData(encryptedData);
     }, 3000);
 
     return () => clearInterval(interval);
@@ -215,12 +220,16 @@ export default function Courses() {
               {currentClass ? (
                 <>
                   {console.log('Current Class Data:', currentClass)}
-                  <QRCode 
-                    value={JSON.stringify(qrData)}
-                    size={650}
-                    backgroundColor="white"
-                    color="black"
-                  />
+                  {qrData ? (
+                    <QRCode 
+                      value={qrData}
+                      size={650}
+                      backgroundColor="white"
+                      color="black"
+                    />
+                  ) : (
+                    <Text style={styles.errorText}>Generando código QR...</Text>
+                  )}
                 </>
               ) : (
                 <Text style={styles.errorText}>No hay clase programada en este momento</Text>
