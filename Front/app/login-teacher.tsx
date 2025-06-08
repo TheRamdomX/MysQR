@@ -4,7 +4,7 @@ import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, Touchabl
 import PublicRoute from '../components/PublicRoute';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.100.54:8088';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');

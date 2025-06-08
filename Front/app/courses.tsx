@@ -9,7 +9,7 @@ import CryptoJS from 'crypto-js';
 
 const isWeb = Platform.OS === 'web';
 
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.100.54:8088';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -82,7 +82,12 @@ export default function Courses() {
         profesorid: userData?.profesorId,
         moduloid: currentClass?.modulo_id,
         seccionid: currentClass?.seccion_id,
-        FechaRegistro: new Date().toISOString()
+        FechaRegistro: new Date().toLocaleTimeString('en-US', { 
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
       };
       const encryptedData = encryptQRData(newQrData);
       setQrData(encryptedData);

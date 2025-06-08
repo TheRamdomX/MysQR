@@ -10,7 +10,7 @@ import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.100.54:8088';
 
 interface Course {
   id: string;
@@ -129,8 +129,21 @@ export default function CoursesStudent() {
       console.log('QR Data decrypted:', qrData);
 
       // Verificar que tenemos todos los datos necesarios
-      if (!qrData.moduloid || !qrData.seccionid) {
+      if (!qrData.moduloid || !qrData.seccionid || !qrData.FechaRegistro) {
         console.error('QR inválido: faltan datos necesarios');
+        return;
+      }
+
+      // Verificar que el QR no tenga más de 5 segundos de antigüedad
+      const qrTime = qrData.FechaRegistro.split(':').map(Number);
+      const currentTime = hora.split(':').map(Number);
+      
+      const qrSeconds = qrTime[0] * 3600 + qrTime[1] * 60 + qrTime[2];
+      const currentSeconds = currentTime[0] * 3600 + currentTime[1] * 60 + currentTime[2];
+      
+      const timeDiff = Math.abs(currentSeconds - qrSeconds);
+      if (timeDiff > 5) {
+        alert('QR expirado');
         return;
       }
 

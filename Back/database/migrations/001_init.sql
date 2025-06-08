@@ -354,8 +354,8 @@ FROM (
                  to_char(m.Fecha, 'MM-DD'),
                  jsonb_build_object(
                      'estado', CASE
-                         WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
-                         ELSE '🔴'
+                                  WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
+                                  ELSE '🔴'
                      END,
                      'alumno_id', a.ID,
                      'modulo_id', m.ID
