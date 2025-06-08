@@ -1,3 +1,5 @@
+version: '3'
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -28,15 +30,11 @@ services:
       - "--entrypoints.websecure.address=:8088"
       - "--providers.docker.network=mysqr-network"
       - "--log.level=DEBUG"
-      - "--accesslog=true"
-      - "--accesslog.filepath=/var/log/traefik/access.log"
-      - "--accesslog.format=json"
     ports:
       - "80:80"
       - "8088:8088"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/logs:/var/log/traefik
     networks:
       - mysqr-network
     depends_on:

@@ -140,11 +140,18 @@ func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID, moduloID int) 
 
 // 4.1. Registro en Asistencia manual
 func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID int) error {
-	query := `
+	insertQuery := `
 		INSERT INTO Asistencia (AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd)
 		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
 	`
-	_, err := s.db.Exec(query, alumnoID, seccionID, moduloID)
+	_, err := s.db.Exec(insertQuery, alumnoID, seccionID, moduloID)
+	return err
+}
+
+// 4.2. Eliminar registros manuales de una sección
+func (s *DatabaseService) DeleteManualAttendanceBySection(seccionID int) error {
+	deleteQuery := `DELETE FROM Asistencia WHERE SeccionID = $1 AND ManualInd = 1`
+	_, err := s.db.Exec(deleteQuery, seccionID)
 	return err
 }
 
