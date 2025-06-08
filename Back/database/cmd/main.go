@@ -195,6 +195,28 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	// 4.2. Eliminar registros manuales de una sección
+	http.HandleFunc("/api/db/attendance/manual/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var request struct {
+			SeccionID int `json:"seccion_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if err := dbService.DeleteManualAttendanceBySection(request.SeccionID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
 	// 5. Obtener SeccionesID y nombre de asignaturas con el AlumnoId
 	http.HandleFunc("/api/db/sections/student/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
