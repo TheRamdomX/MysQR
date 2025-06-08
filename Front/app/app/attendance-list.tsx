@@ -101,19 +101,16 @@ export default function AttendanceList() {
     });
   };
 
-  // Clona los datos actuales para la edición
   const handleEdit = () => {
     setEditedAttendance(JSON.parse(JSON.stringify(students)));
     setEditMode(true);
   };
 
-  // Cancelar el modo de edición
   const handleCancel = () => {
     setEditMode(false);
     setEditedAttendance(null);
   };
 
-  // Guardar los cambios
   const handleSave = async () => {
     try {
       if (editedAttendance) {
@@ -121,8 +118,7 @@ export default function AttendanceList() {
           for (const date in student.asistencia) {
             const asistenciaData = student.asistencia[date];
             const isPresent = asistenciaData.estado === '🟢';
-            
-            // Solo enviar al backend si el estado ha cambiado
+
             if (isPresent) {
               const requestData = {
                 alumno_id: Number(asistenciaData.alumno_id),
