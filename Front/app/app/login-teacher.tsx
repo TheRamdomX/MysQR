@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import PublicRoute from '../components/PublicRoute';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = 'http://localhost:8088';
@@ -13,8 +14,8 @@ export default function LoginScreen() {
     const { login } = useAuth();
 
     const handleLogin = async () => {
-        if (!usuario || !contrasena) {
-            Alert.alert('Error', 'Por favor complete todos los campos');
+        if (!usuario.trim() || !contrasena.trim()) {
+            Alert.alert('Error', 'Por favor, complete todos los campos.');
             return;
         }
 
@@ -56,7 +57,6 @@ export default function LoginScreen() {
 
                 await login(data.token, userData);
                 
-                // Limpiar los campos de entrada
                 setUsuario('');
                 setContrasena('');
                 
@@ -66,20 +66,21 @@ export default function LoginScreen() {
             }
         } catch (error) {
             console.error('Error de login:', error);
-            Alert.alert('Error', 'Error al conectar con el servidor. Por favor, intente nuevamente.');
+            Alert.alert('Error', 'Error durante el proceso de autenticación. Por favor, intente nuevamente.');
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <ImageBackground
-            source={{ uri: 'https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2020/08/2876_DSC_0005-1-scaled.jpg' }}
-            style={styles.background}
-            resizeMode="cover"
-        >
-            <View style={styles.overlay} />
-            <View style={styles.container}>
+        <PublicRoute>
+            <ImageBackground
+                source={{ uri: 'https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2020/08/2876_DSC_0005-1-scaled.jpg' }}
+                style={styles.background}
+                resizeMode="cover"
+            >
+                <View style={styles.overlay} />
+                <View style={styles.container}>
                 <View style={styles.card}>
                     <Text style={styles.title}>Iniciar Sesión Profesor</Text>
                     <TextInput
@@ -109,6 +110,7 @@ export default function LoginScreen() {
                 </View>
             </View>
         </ImageBackground>
+        </PublicRoute>
     );
 }
 
@@ -170,4 +172,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    link: { 
+        color:'#1976D2', 
+        marginTop:15 
+    }
 }); 

@@ -1,8 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import PublicRoute from '../components/PublicRoute';
 
-const MyButton = ({ title, onPress }) => (
+interface MyButtonProps {
+  title: string;
+  onPress: () => void;
+}
+
+const MyButton: React.FC<MyButtonProps> = ({ title, onPress }) => (
   <Pressable
     style={({ pressed }) => [
       styles.button,
@@ -18,21 +24,23 @@ export default function RolSelect() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      <View style={StylesHeader.header}>
+    <PublicRoute>
+      <View style={styles.container}>
+        <View style={StylesHeader.header}>
+        </View>
+        <View style={styles.content}>
+          <MyButton 
+            title="Estudiantes" 
+            onPress={() => router.push('/login-student' as any)} 
+          />
+          <MyButton 
+            title="Profesores" 
+            onPress={() => router.push('/login-teacher' as any)} 
+          />
+        </View>
+        <View style={StylesFooter.footer}></View>
       </View>
-      <View style={styles.content}>
-        <MyButton 
-          title="Estudiantes" 
-          onPress={() => router.push('/login-student')} 
-        />
-        <MyButton 
-          title="Profesores" 
-          onPress={() => router.push('/login-teacher')} 
-        />
-      </View>
-      <View style={StylesFooter.footer}></View>
-    </View>
+    </PublicRoute>
   );
 }
 

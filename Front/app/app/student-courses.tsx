@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Image, Dimensions, Platform } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
 
@@ -158,7 +157,6 @@ export default function CoursesStudent() {
 
   const renderItem = ({ item }: { item: Course }) => {
     return (
-
       <View style={styles.card}>
         <Text style={styles.title}>{item.nombre}</Text>
         <Text style={styles.text}>CIT: {item.cit}</Text>
@@ -173,83 +171,72 @@ export default function CoursesStudent() {
   };
 
   return (
-    <ProtectedRoute>
-    <View style={styles.mainContainer}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+    <ProtectedRoute allowedRoles={['alumno', 'student']}>
+      <View style={styles.mainContainer}>
+        <View style={styles.header}>
           <Image
             source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
             style={styles.image}
             resizeMode="contain"
           />
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <AntDesign name="logout" size={24} color="#fff" />
-          </TouchableOpacity>
+          <Text style={styles.headerText}>Tus Cursos</Text>
+          <View style={styles.horaContainer}>
+            <Text style={styles.horaText}>{hora}</Text>
+          </View>
         </View>
-        <Text style={styles.headerText}>Tus Cursos</Text>
-        <View style={styles.horaContainer}>
-          <Text style={styles.horaText}>{hora}</Text>
+        <View style={styles.container}>
+          <FlatList
+            data={courses}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            numColumns={getNumColumns()}
+            contentContainerStyle={styles.list}
+          />
         </View>
-      </View>
-      <View style={styles.container}>
-        <FlatList
-          data={courses}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={getNumColumns()}
-          contentContainerStyle={styles.list}
-        />
-      </View>
-      <TouchableOpacity
-        style={styles.qrButton}
-        onPress={() => {
-          setScanned(false);
-          setScannedData('');
-          setQrVisible(true);
-        }}
-      >
-        <Text style={styles.qrButtonText}>Escanear QR</Text>
-      </TouchableOpacity>
-      <Modal visible={qrVisible} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-        <View style={styles.qrModalContent}>
-  <TouchableOpacity style={styles.closeIcon} onPress={() => setQrVisible(false)}>
-    <AntDesign name="close" size={35} color="#fff" />
-  </TouchableOpacity>
-  {!permission ? (
-    <View style={styles.permissionContainer}>
-      <Text style={styles.permissionText}>Loading...</Text>
-    </View>
-  ) : !permission.granted ? (
-    <View style={styles.permissionContainer}>
-      <Text style={styles.permissionText}>We need your permission to show the camera</Text>
-      <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-        <Text style={styles.permissionButtonText}>Grant Permission</Text>
-      </TouchableOpacity>
-    </View>
-  ) : (
-    <View style={styles.scannerContainer}>
-      <View style={styles.cameraContainer}>
-        <CameraView
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-          style={styles.camera}
-        />
-      </View>
-      <View style={styles.overlay}>
-        <View style={styles.scanFrame} />
-      </View>
-      {scanned && (
-        <TouchableOpacity style={styles.scanAgainButton} onPress={() => setScanned(false)}>
-          <Text style={styles.scanAgainButtonText}>Tap to Scan Again</Text>
+        <TouchableOpacity
+          style={styles.qrButton}
+          onPress={() => {
+            setScanned(false);
+            setScannedData('');
+            setQrVisible(true);
+          }}
+        >
+          <Text style={styles.qrButtonText}>Escanear QR</Text>
         </TouchableOpacity>
-      )}
-    </View>
-  )}
-</View>
-        </View>
-      </Modal>
-    </View>
+        <Modal visible={qrVisible} transparent animationType="fade">
+          <View style={styles.modalContainer}>
+            <View style={styles.qrModalContent}>
+              <TouchableOpacity style={styles.closeIcon} onPress={() => setQrVisible(false)}>
+                <AntDesign name="close" size={35} color="#fff" />
+              </TouchableOpacity>
+              {!permission ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={styles.permissionText}>Loading...</Text>
+                </View>
+              ) : !permission.granted ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={styles.permissionText}>We need your permission to show the camera</Text>
+                  <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                    <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <CameraView
+                  style={styles.camera}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['qr'],
+                  }}
+                  onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                >
+                  <View style={styles.overlay}>
+                    <View style={styles.scanArea} />
+                  </View>
+                </CameraView>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </View>
     </ProtectedRoute>
   );
 }

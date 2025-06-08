@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 interface UserData {
     id: number;
     rol: string;
     rut: string;
+    nombre?: string;
     alumnoId?: number;
+    profesorId?: number;
 }
 
 interface AuthContextType {
@@ -63,25 +65,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const validateToken = async (token: string): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_URL}/api/validate-token`, {
-                method: 'GET',
+            // Hacer una petición al backend para validar el token
+            const response = await fetch(`${API_URL}/api/qr/validate-token`, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
             });
-            
-            if (!response.ok) {
-                console.warn('Token inválido:', response.status);
-                return false;
-            }
-            
-            return true;
+
+            return response.ok;
         } catch (error) {
             console.error('Error validando token:', error);
-            // Si hay un error de conexión, asumimos que el token es válido
-            // para evitar cerrar sesión innecesariamente
-            return true;
+            return false;
         }
     };
 
