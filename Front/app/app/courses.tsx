@@ -47,6 +47,12 @@ export default function Courses() {
   const [estudiantes, setEstudiantes] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
+  const [qrData, setQrData] = useState({
+    profesorid: userData?.profesorId,
+    moduloid: currentClass?.modulo_id,
+    seccionid: currentClass?.seccion_id,
+    FechaRegistro: new Date().toISOString()
+  });
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -66,6 +72,19 @@ export default function Courses() {
     };
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQrData({
+        profesorid: userData?.profesorId,
+        moduloid: currentClass?.modulo_id,
+        seccionid: currentClass?.seccion_id,
+        FechaRegistro: new Date().toISOString()
+      });
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [userData, currentClass]);
 
   const loadProfessorSections = async (profesorId: string) => {
     try {
@@ -105,7 +124,7 @@ export default function Courses() {
       }
       
       console.log('Consultando clase actual para profesor:', numId);
-      const response = await fetch(`${API_URL}/api/professor/${numId}/current-class`);
+      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${numId}`);
       console.log('Status de la respuesta:', response.status);
       
       if (response.ok) {
@@ -131,13 +150,6 @@ export default function Courses() {
       console.error('Error al cargar la clase actual:', error);
       setCurrentClass(null);
     }
-  };
-
-  const qrData = {
-    profesorid: userData?.profesorId,
-    moduloid: currentClass?.modulo_id,
-    seccionid: currentClass?.seccion_id,
-    FechaRegistro :new Date().toISOString()
   };
 
   console.log('QR Data being generated:', qrData);

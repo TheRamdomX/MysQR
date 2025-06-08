@@ -229,7 +229,7 @@ export default function CoursesStudent() {
                   onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                 >
                   <View style={styles.overlay}>
-                    <View style={styles.scanArea} />
+                    <View style={styles.scanFrame} />
                   </View>
                 </CameraView>
               )}
