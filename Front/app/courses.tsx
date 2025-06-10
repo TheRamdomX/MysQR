@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions, ScrollView } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 import CryptoJS from 'crypto-js';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 
 const isWeb = Platform.OS === 'web';
 
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://localhost:8088';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -18,6 +20,8 @@ interface Course {
   nombre: string;
   cit: string;  
   asistencia: string[];
+  dias: string[];
+  bloque: string;
 }
 
 interface UserData {
@@ -45,17 +49,35 @@ const encryptQRData = (data: any) => {
   return encrypted;
 };
 
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+const BLOQUES_HORARIOS = [
+  '8:30-10:00',
+  '10:00-11:30',
+  '11:30-13:00',
+  '13:00-14:30',
+  '14:30-16:00',
+  '16:00-17:30',
+  '17:30-19:00'
+];
+
 export default function Courses() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
+  const [csvModalVisible, setCsvModalVisible] = useState(false);
   const [nombre, setNombre] = useState('');
   const [cit, setCit] = useState('');
   const [estudiantes, setEstudiantes] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
   const [qrData, setQrData] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerResult | null>(null);
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
+  const [bloqueSeleccionado, setBloqueSeleccionado] = useState<string>('');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -115,7 +137,9 @@ export default function Courses() {
             id: seccion.seccion_id.toString(),
             nombre: seccion.nombre,
             cit: `CIT${seccion.asignatura_id}`,
-            asistencia: []
+            asistencia: [],
+            dias: [],
+            bloque: ''
         }));
         
         setCourses(cursos);
@@ -162,10 +186,16 @@ export default function Courses() {
     }
   };
 
-  console.log('QR Data being generated:', qrData);
+  const toggleDia = (dia: string) => {
+    if (diasSeleccionados.includes(dia)) {
+      setDiasSeleccionados(diasSeleccionados.filter(d => d !== dia));
+    } else if (diasSeleccionados.length < 3) {
+      setDiasSeleccionados([...diasSeleccionados, dia]);
+    }
+  };
 
   const addCourse = () => {
-    if (nombre) {
+    if (nombre && cit && diasSeleccionados.length > 0 && bloqueSeleccionado) {
       setCourses([
         ...courses,
         {
@@ -173,11 +203,15 @@ export default function Courses() {
           nombre,
           cit,
           asistencia: [],
+          dias: diasSeleccionados,
+          bloque: bloqueSeleccionado
         },
       ]);
       setNombre('');
       setCit('');
       setEstudiantes('');
+      setDiasSeleccionados([]);
+      setBloqueSeleccionado('');
       setModalVisible(false);
     }
   };
@@ -195,6 +229,305 @@ export default function Courses() {
     </View>
   );
 
+  const handleFilePick = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true
+      });
+
+      if (result.assets && result.assets.length > 0) {
+        const fileName = result.assets[0].name;
+        console.log('Nombre del archivo seleccionado:', fileName);
+        
+        // Extraer código y sección del nombre del archivo
+        const codigoMatch = fileName.match(/CIT\d+/);
+        const seccionMatch = fileName.match(/CA\d+/);
+        
+        if (codigoMatch && seccionMatch) {
+          const codigo = codigoMatch[0];
+          const seccion = seccionMatch[0];
+          console.log('Código extraído:', codigo);
+          console.log('Sección extraída:', seccion);
+          
+          setCit(codigo);
+          setNombre(`Sección ${seccion}`);
+          setSelectedFile(result);
+          setUploadStatus('Archivo seleccionado: ' + fileName);
+        } else {
+          console.error('Formato de archivo incorrecto. No se encontró código o sección');
+          setUploadStatus('Error: El nombre del archivo no tiene el formato correcto');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error al seleccionar archivo:', error);
+      setUploadStatus('Error al seleccionar archivo');
+    }
+  };
+
+  const cleanStudentData = (student: any) => {
+    // Obtener y limpiar el nombre completo
+    const fullName = student.Student?.trim() || '';
+    
+    // Ignorar la línea de "Points Possible"
+    if (fullName === 'Points Possible') {
+      return null;
+    }
+
+    // Normalizar caracteres especiales
+    const normalizeText = (text: string) => {
+      return text
+        // Primero reemplazar los caracteres especiales más comunes
+        .replace(/Ã¡/g, 'á')
+        .replace(/Ã©/g, 'é')
+        .replace(/Ã­/g, 'í')
+        .replace(/Ã³/g, 'ó')
+        .replace(/Ãº/g, 'ú')
+        .replace(/Ã±/g, 'ñ')
+        .replace(/Ã/g, 'Á')
+        .replace(/Ã‰/g, 'É')
+        .replace(/Ã/g, 'Í')
+        .replace(/Ã"/g, 'Ó')
+        .replace(/Ãš/g, 'Ú')
+        .replace(/Ã'/g, 'Ñ')
+        // Luego manejar los caracteres especiales con escape
+        .replace(/\\x81/g, 'Á')
+        .replace(/\\x8D/g, 'Í')
+        .replace(/\\x93/g, 'Ó')
+        .replace(/\\x9A/g, 'Ú')
+        .replace(/\\x91/g, 'Ñ')
+        .replace(/\\x8DN/g, 'ÍN')
+        .replace(/\\x81S/g, 'ÁS')
+        .replace(/\\x93N/g, 'ÓN')
+        .replace(/\\x9AS/g, 'ÚS')
+        .replace(/\\x91O/g, 'ÑO')
+        // Eliminar comillas y espacios extra
+        .replace(/"/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    // Separar nombre y apellido
+    const nameParts = fullName.split(',').map((part: string) => normalizeText(part.trim()));
+    if (nameParts.length < 2) {
+      console.warn('Formato de nombre inválido:', fullName);
+      return null;
+    }
+
+    const apellido = nameParts[0];
+    const nombre = nameParts[1];
+
+    // Normalizar el ID y otros campos
+    const id = student.ID?.trim() || '';
+    const sisUserId = student['SIS User ID']?.trim() || '';
+    const sisLoginId = student['SIS Login ID']?.trim() || '';
+    const seccion = normalizeText(student.Section?.trim() || '');
+
+    // Validar que los campos requeridos no estén vacíos
+    if (!id || !nombre || !apellido) {
+      console.warn('Datos incompletos para el estudiante:', { id, nombre, apellido });
+      return null;
+    }
+
+    console.log('Datos del estudiante procesados:', {
+      nombreCompleto: fullName,
+      nombre: nombre,
+      apellido: apellido,
+      id: id
+    });
+
+    return {
+      nombre: nombre,
+      apellido: apellido,
+      id: id,
+      sis_user_id: sisUserId,
+      sis_login_id: sisLoginId,
+      seccion: seccion
+    };
+  };
+
+  const processCSVInBatches = async (fileUri: string) => {
+    try {
+      let fileContent: string;
+      
+      if (Platform.OS === 'web') {
+        // Leer el archivo directamente como texto UTF-8
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        fileContent = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const content = reader.result as string;
+            // Verificar si el contenido está en base64
+            if (content.startsWith('data:text/csv;base64,')) {
+              try {
+                // Extraer la parte base64 y decodificarla
+                const base64Content = content.split(',')[1];
+                // Usar TextDecoder para manejar correctamente la codificación UTF-8
+                const binaryString = atob(base64Content);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const decodedContent = new TextDecoder('utf-8').decode(bytes);
+                console.log('Contenido decodificado correctamente:', decodedContent.substring(0, 200));
+                resolve(decodedContent);
+              } catch (error) {
+                console.error('Error al decodificar base64:', error);
+                reject(error);
+              }
+            } else {
+              resolve(content);
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsText(blob, 'UTF-8');
+        });
+      } else {
+        fileContent = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+      }
+
+      console.log('Contenido decodificado del archivo CSV:', fileContent);
+
+      // Procesar el CSV línea por línea
+      const lines = fileContent.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          // Usar una expresión regular más robusta para manejar campos con comillas
+          const matches = line.match(/"([^"]*)",([^,]*),([^,]*),([^,]*),([^,]*)/);
+          if (matches) {
+            return {
+              Student: matches[1],
+              ID: matches[2],
+              'SIS User ID': matches[3],
+              'SIS Login ID': matches[4],
+              Section: matches[5]
+            };
+          }
+          return null;
+        })
+        .filter(line => line !== null);
+
+      console.log('Líneas procesadas del CSV:', lines.length);
+      console.log('Primera línea de ejemplo:', lines[0]);
+
+      const headers = ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Section'];
+      console.log('Encabezados del CSV:', headers);
+
+      const batchSize = 50;
+      const totalBatches = Math.ceil((lines.length - 1) / batchSize);
+      
+      console.log('Configuración de lotes:', {
+        batchSize,
+        totalBatches,
+        totalLines: lines.length
+      });
+
+      setUploadStatus('Procesando archivo...');
+      setUploadProgress(0);
+
+      for (let i = 1; i < lines.length; i += batchSize) {
+        const batch = lines.slice(i, i + batchSize);
+        console.log(`Procesando lote ${Math.floor(i/batchSize) + 1} de ${totalBatches}`);
+        console.log('Tamaño del lote actual:', batch.length);
+
+        const batchData = batch
+          .map(line => cleanStudentData(line))
+          .filter(student => student !== null);
+
+        console.log('Datos limpios del lote:', batchData.length, 'estudiantes');
+
+        if (batchData.length === 0) {
+          console.log('Lote vacío, saltando...');
+          continue;
+        }
+
+        const url = `${API_URL}/api/db/sections/students/batch`;
+        console.log('URL del endpoint:', url);
+        console.log('Datos a enviar:', JSON.stringify({ 
+          students: batchData,
+          curso: {
+            codigo: cit,
+            nombre: nombre,
+            dias: diasSeleccionados,
+            bloque: bloqueSeleccionado
+          }
+        }, null, 2));
+
+        try {
+          console.log('Iniciando petición al backend...');
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              students: batchData,
+              curso: {
+                codigo: cit,
+                nombre: nombre,
+                dias: diasSeleccionados,
+                bloque: bloqueSeleccionado
+              }
+            }),
+          });
+
+          console.log('Respuesta recibida:', response.status, response.statusText);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error en la respuesta del servidor:', errorText);
+            throw new Error(`Error en lote ${Math.floor(i/batchSize) + 1}: ${errorText}`);
+          }
+
+          const responseData = await response.json();
+          console.log('Datos de respuesta:', responseData);
+        } catch (error) {
+          console.error('Error completo:', error);
+          throw error;
+        }
+
+        const progress = Math.round(((i + batch.length - 1) / (lines.length - 1)) * 100);
+        setUploadProgress(progress);
+        setUploadStatus(`Procesando lote ${Math.floor(i/batchSize) + 1} de ${totalBatches}`);
+      }
+
+      console.log('Proceso completado exitosamente');
+      setUploadStatus('¡Archivo procesado con éxito!');
+      setTimeout(() => {
+        setCsvModalVisible(false);
+        setUploadProgress(0);
+        setUploadStatus('');
+        setSelectedFile(null);
+      }, 2000);
+    } catch (error) {
+      console.error('Error procesando CSV:', error);
+      setUploadStatus('Error al procesar el archivo');
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile?.assets || selectedFile.assets.length === 0) {
+      setUploadStatus('Por favor, seleccione un archivo primero');
+      return;
+    }
+
+    if (!cit || !nombre) {
+      setUploadStatus('Error: No se pudo extraer el código o la sección del archivo');
+      return;
+    }
+
+    const fileUri = Platform.OS === 'web' 
+      ? URL.createObjectURL(new Blob([selectedFile.assets[0].uri]))
+      : selectedFile.assets[0].uri;
+
+    await processCSVInBatches(fileUri);
+  };
+
   return (
     <ProtectedRoute>
       <View style={{ flex: 1 }}>
@@ -206,10 +539,10 @@ export default function Courses() {
           />
           <Text style={StylesHeader.headerText}>Tus Cursos</Text>
           <Pressable
-            style={styles.button}
+            style={styles.qrButton}
             onPress={() => setQrVisible(true)}
           >
-            <Text style={styles.buttonText}>Generar QR</Text>
+            <Text style={styles.qrButtonText}>Generar QR</Text>
           </Pressable>
         </View>
 
@@ -251,9 +584,15 @@ export default function Courses() {
             numColumns={Platform.OS === 'web' ? 3 : 1}
             contentContainerStyle={styles.list}
           />
-          <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-            <AntDesign name="pluscircle" size={56} color="#8B0000" />
-          </TouchableOpacity>
+          
+          <View style={styles.addButtonContainer}>
+            <TouchableOpacity 
+              style={styles.addButton} 
+              onPress={() => setCsvModalVisible(true)}
+            >
+              <AntDesign name="pluscircle" size={56} color="#8B0000" />
+            </TouchableOpacity>
+          </View>
 
           <Modal visible={modalVisible} transparent animationType="slide">
             <View style={styles.modalContainer}>
@@ -271,15 +610,58 @@ export default function Courses() {
                   onChangeText={setCit}
                   style={styles.input}
                 />
-                <TextInput
-                  placeholder="Estudiantes"
-                  value={estudiantes}
-                  onChangeText={setEstudiantes}
-                  keyboardType="numeric"
-                  style={styles.input}
-                />
+                
+                <Text style={styles.sectionTitle}>Días de la semana (máx. 3)</Text>
+                <View style={styles.diasContainer}>
+                  {DIAS_SEMANA.map((dia) => (
+                    <TouchableOpacity
+                      key={dia}
+                      style={[
+                        styles.diaButton,
+                        diasSeleccionados.includes(dia) && styles.diaButtonSelected
+                      ]}
+                      onPress={() => toggleDia(dia)}
+                    >
+                      <Text style={[
+                        styles.diaButtonText,
+                        diasSeleccionados.includes(dia) && styles.diaButtonTextSelected
+                      ]}>
+                        {dia}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.sectionTitle}>Bloque horario</Text>
+                <ScrollView style={styles.bloquesContainer}>
+                  {BLOQUES_HORARIOS.map((bloque) => (
+                    <TouchableOpacity
+                      key={bloque}
+                      style={[
+                        styles.bloqueButton,
+                        bloqueSeleccionado === bloque && styles.bloqueButtonSelected
+                      ]}
+                      onPress={() => setBloqueSeleccionado(bloque)}
+                    >
+                      <Text style={[
+                        styles.bloqueButtonText,
+                        bloqueSeleccionado === bloque && styles.bloqueButtonTextSelected
+                      ]}>
+                        {bloque}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity onPress={addCourse} style={styles.modalButton}>
+                  <TouchableOpacity 
+                    onPress={addCourse} 
+                    style={[
+                      styles.modalButton,
+                      (!nombre || !cit || diasSeleccionados.length === 0 || !bloqueSeleccionado) && styles.modalButtonDisabled
+                    ]}
+                    disabled={!nombre || !cit || diasSeleccionados.length === 0 || !bloqueSeleccionado}
+                  >
                     <Text style={styles.buttonText}>Agregar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
@@ -290,6 +672,95 @@ export default function Courses() {
             </View>
           </Modal>
         </View>
+
+        <Modal visible={csvModalVisible} transparent animationType="slide">
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                onPress={() => setCsvModalVisible(false)}
+                style={styles.closeIcon}
+              >
+                <AntDesign name="close" size={35} color="#ffff" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Subir Archivo CSV</Text>
+              
+              <TouchableOpacity 
+                style={styles.uploadButton} 
+                onPress={handleFilePick}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {selectedFile?.assets && selectedFile.assets.length > 0 ? 'Cambiar archivo' : 'Seleccionar archivo'}
+                </Text>
+              </TouchableOpacity>
+
+              {selectedFile?.assets && selectedFile.assets.length > 0 && (
+                <Text style={styles.fileName}>{selectedFile.assets[0].name}</Text>
+              )}
+
+              <Text style={styles.sectionTitle}>Días de la semana (máx. 3)</Text>
+              <View style={styles.diasContainer}>
+                {DIAS_SEMANA.map((dia) => (
+                  <TouchableOpacity
+                    key={dia}
+                    style={[
+                      styles.diaButton,
+                      diasSeleccionados.includes(dia) && styles.diaButtonSelected
+                    ]}
+                    onPress={() => toggleDia(dia)}
+                  >
+                    <Text style={[
+                      styles.diaButtonText,
+                      diasSeleccionados.includes(dia) && styles.diaButtonTextSelected
+                    ]}>
+                      {dia}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionTitle}>Bloque horario</Text>
+              <ScrollView style={styles.bloquesContainer}>
+                {BLOQUES_HORARIOS.map((bloque) => (
+                  <TouchableOpacity
+                    key={bloque}
+                    style={[
+                      styles.bloqueButton,
+                      bloqueSeleccionado === bloque && styles.bloqueButtonSelected
+                    ]}
+                    onPress={() => setBloqueSeleccionado(bloque)}
+                  >
+                    <Text style={[
+                      styles.bloqueButtonText,
+                      bloqueSeleccionado === bloque && styles.bloqueButtonTextSelected
+                    ]}>
+                      {bloque}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {uploadProgress > 0 && (
+                <View style={styles.progressContainer}>
+                  <View style={[styles.progressBar, { width: `${uploadProgress}%` }]} />
+                  <Text style={styles.progressText}>{uploadProgress}%</Text>
+                </View>
+              )}
+
+              <Text style={styles.statusText}>{uploadStatus}</Text>
+
+              <TouchableOpacity 
+                style={[
+                  styles.uploadButton,
+                  (!selectedFile?.assets || selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado) && styles.uploadButtonDisabled
+                ]} 
+                onPress={handleUpload}
+                disabled={!selectedFile?.assets || selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado}
+              >
+                <Text style={styles.uploadButtonText}>Subir</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ProtectedRoute>
   );
@@ -360,7 +831,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
-    width: 300,
+    width: 400,
     alignItems: 'center',
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
@@ -384,24 +855,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 20,
   },
-  addButton: {
+  addButtonContainer: {
     position: 'absolute',
     bottom: 20,
     right: 20,
+    alignItems: 'flex-end',
   },
-  button: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 16,
-    top: 10,
+  addButton: {
+    backgroundColor: 'transparent',
+    padding: 0,
   },
   buttonPressed: {
     backgroundColor: '#c4b9b9',
@@ -427,5 +889,138 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     marginTop: 20,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  uploadButton: {
+    backgroundColor: '#8B0000',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  fileName: {
+    marginVertical: 10,
+    color: '#666',
+    fontSize: 14,
+  },
+  progressContainer: {
+    width: '100%',
+    height: 20,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    marginVertical: 10,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#8B0000',
+    borderRadius: 10,
+  },
+  progressText: {
+    position: 'absolute',
+    width: '100%',
+    textAlign: 'center',
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 12,
+    lineHeight: 20,
+  },
+  statusText: {
+    marginVertical: 10,
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  qrButton: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 16,
+    top: 10,
+  },
+  qrButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    fontSize: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#8B0000',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  diasContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 15,
+  },
+  diaButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#8B0000',
+    backgroundColor: 'transparent',
+  },
+  diaButtonSelected: {
+    backgroundColor: '#8B0000',
+  },
+  diaButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+  },
+  diaButtonTextSelected: {
+    color: '#fff',
+  },
+  bloquesContainer: {
+    maxHeight: 150,
+    marginBottom: 15,
+    width: '100%',
+  },
+  bloqueButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#8B0000',
+    backgroundColor: 'transparent',
+    marginBottom: 8,
+    width: '100%',
+  },
+  bloqueButtonSelected: {
+    backgroundColor: '#8B0000',
+  },
+  bloqueButtonText: {
+    color: '#8B0000',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  bloqueButtonTextSelected: {
+    color: '#fff',
+  },
+  modalButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  uploadButtonDisabled: {
+    backgroundColor: '#ccc',
   },
 }); 

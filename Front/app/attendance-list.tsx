@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIn
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://localhost:8088';
 
 interface Attendance {
   [key: string]: {
@@ -227,9 +227,6 @@ export default function AttendanceList() {
                 <>
                   <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                     <Text style={styles.saveButtonText}>Guardar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                    <Text style={styles.cancelButtonText}>Cancelar</Text>
                   </TouchableOpacity>
                 </>
               )}

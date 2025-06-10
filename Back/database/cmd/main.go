@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -327,6 +328,77 @@ func main() {
 		// Establecer el tipo de contenido y enviar la respuesta
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(reporte)
+	})
+
+	// 7. Procesar estudiantes en lotes
+	http.HandleFunc("/api/db/sections/students/batch", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Recibida petición POST en /api/db/sections/students/batch")
+
+		if r.Method != http.MethodPost {
+			log.Printf("Método no permitido: %s", r.Method)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Leer el cuerpo de la petición
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error al leer el cuerpo de la petición: %v", err)
+			http.Error(w, "Error reading request body", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Cuerpo de la petición recibido: %s", string(body))
+
+		var request struct {
+			Students []struct {
+				Nombre     string `json:"nombre"`
+				ID         string `json:"id"`
+				SisUserID  string `json:"sis_user_id"`
+				SisLoginID string `json:"sis_login_id"`
+				Seccion    string `json:"seccion"`
+			} `json:"students"`
+			Curso struct {
+				Codigo string   `json:"codigo"`
+				Nombre string   `json:"nombre"`
+				Dias   []string `json:"dias"`
+				Bloque string   `json:"bloque"`
+			} `json:"curso"`
+		}
+
+		if err := json.Unmarshal(body, &request); err != nil {
+			log.Printf("Error al decodificar JSON: %v", err)
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Mostrar información recibida
+		log.Printf("Información recibida en /api/db/sections/students/batch:")
+		log.Printf("Curso: %+v", request.Curso)
+		log.Printf("Número de estudiantes: %d", len(request.Students))
+		for i, student := range request.Students {
+			log.Printf("Estudiante %d: %+v", i+1, student)
+		}
+
+		/*
+			// Procesar cada estudiante
+			for _, student := range request.Students {
+				// Insertar o actualizar estudiante
+				query := `
+					INSERT INTO Alumnos (ID, Nombre, Apellido)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (ID) DO UPDATE
+					SET Nombre = $2, Apellido = $3
+				`
+				_, err := db.Exec(query, student.ID, student.Nombre, student.SisLoginID)
+				if err != nil {
+					log.Printf("Error al procesar estudiante %s: %v", student.ID, err)
+					continue
+				}
+			}
+		*/
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Información recibida correctamente"})
 	})
 
 	log.Println("Server started on :8084")

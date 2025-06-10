@@ -10,7 +10,7 @@ import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://localhost:8088';
 
 interface Course {
   id: string;
@@ -120,7 +120,6 @@ export default function CoursesStudent() {
       setScanned(true);
       setScannedData(data);
       
-      // Desencriptar los datos del QR
       const qrData = decryptQRData(data);
       if (!qrData) {
         console.error('Error al desencriptar QR');
@@ -128,13 +127,11 @@ export default function CoursesStudent() {
       }
       console.log('QR Data decrypted:', qrData);
 
-      // Verificar que tenemos todos los datos necesarios
       if (!qrData.moduloid || !qrData.seccionid || !qrData.FechaRegistro) {
         console.error('QR inválido: faltan datos necesarios');
         return;
       }
 
-      // Verificar que el QR no tenga más de 5 segundos de antigüedad
       const qrTime = qrData.FechaRegistro.split(':').map(Number);
       const currentTime = hora.split(':').map(Number);
       
@@ -167,7 +164,7 @@ export default function CoursesStudent() {
 
       const result = await response.json();
       console.log('Asistencia registrada:', result);
-      
+      alert('¡Asistencia registrada!');
       // Cerrar el modal después de un registro exitoso
       setQrVisible(false);
     } catch (error) {
