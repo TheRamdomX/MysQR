@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions, Alert } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 import CryptoJS from 'crypto-js';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const isWeb = Platform.OS === 'web';
 
@@ -177,6 +179,53 @@ export default function Courses() {
     }
   };
 
+  // Función para exportar la lista de asistencia como Excel
+  const exportToExcel = async (courseId: string, courseName: string) => {
+    try {
+      // Mostrar mensaje de carga
+      if (Platform.OS !== 'web') {
+        Alert.alert('Exportando...', 'Preparando la lista de asistencia para exportar');
+      }
+
+      // Obtener los datos del endpoint
+      const response = await fetch(`${API_URL}/api/db/attendance/report?seccion_id=${courseId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Error al obtener datos: ${response.status}`);
+      }
+      
+      // Convertir la respuesta a JSON
+      const data = await response.json(); 
+      
+      // Crear una hoja de cálculo
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      
+      // Crear un libro de trabajo y añadir la hoja
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia');
+      
+      // Generar el archivo Excel según la plataforma
+      if (Platform.OS === 'web') {
+        // web = usamos FileSaver para descargar el archivo
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const fileData = new Blob([excelBuffer], { type: 'application/octet-stream' });
+        
+        // Nombre del archivo con fecha 
+        const fileName = `Asistencia_${courseName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        saveAs(fileData, fileName);
+        
+        Alert.alert('Éxito', 'La lista de asistencia se ha descargado correctamente');
+      } else {
+        // Para móviles, necesitamos usar expo-file-system y expo-sharing
+        // Pero como esto requeriría más dependencias no lo hice xd
+        Alert.alert('Funcionalidad limitada', 'La exportación a Excel solo está disponible en la versión web');
+      }
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error);
+      Alert.alert('Error', 'No se pudo exportar la lista de asistencia');
+    }
+  };
+
   const renderItem = ({ item }: { item: Course }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.nombre}</Text>
@@ -186,6 +235,12 @@ export default function Courses() {
         onPress={() => router.push(`/attendance-list?courseId=${item.id}`)}
       >
         <Text style={styles.attendanceButtonText}>Lista de asistencia</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.attendanceButton}
+        onPress={() => exportToExcel(item.id, item.nombre)}
+      >
+        <Text style={styles.attendanceButtonText}>Exportar lista</Text>
       </TouchableOpacity>
     </View>
   );
@@ -423,4 +478,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
   },
-}); 
+});
