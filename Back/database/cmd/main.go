@@ -351,11 +351,11 @@ func main() {
 
 		var request struct {
 			Students []struct {
-				Nombre     string `json:"nombre"`
-				ID         string `json:"id"`
-				SisUserID  string `json:"sis_user_id"`
-				SisLoginID string `json:"sis_login_id"`
-				Seccion    string `json:"seccion"`
+				ID             string `json:"id"`
+				Nombre         string `json:"Nombre"`
+				NombreCompleto string `json:"NombreCompleto"`
+				Rut            string `json:"Rut"`
+				Email          string `json:"Email"`
 			} `json:"students"`
 			Curso struct {
 				Codigo string   `json:"codigo"`
@@ -371,41 +371,37 @@ func main() {
 			return
 		}
 
-		// Mostrar información recibida
-		log.Printf("Información recibida en /api/db/sections/students/batch:")
-		log.Printf("Curso: %+v", request.Curso)
-		log.Printf("Número de estudiantes: %d", len(request.Students))
-		for i, student := range request.Students {
-			log.Printf("Estudiante %d: %+v", i+1, student)
+		// Obtener el ID del profesor del token o header
+		profesorID := r.Header.Get("X-Profesor-ID")
+		if profesorID == "" {
+			http.Error(w, "ID de profesor no proporcionado", http.StatusBadRequest)
+			return
 		}
 
-		/*
-			// Procesar cada estudiante
-			for _, student := range request.Students {
-				// Insertar o actualizar estudiante
-				query := `
-					INSERT INTO Alumnos (ID, Nombre, Apellido)
-					VALUES ($1, $2, $3)
-					ON CONFLICT (ID) DO UPDATE
-					SET Nombre = $2, Apellido = $3
-				`
-				_, err := db.Exec(query, student.ID, student.Nombre, student.SisLoginID)
-				if err != nil {
-					log.Printf("Error al procesar estudiante %s: %v", student.ID, err)
-					continue
-				}
-			}
-		*/
+		profesorIDInt, err := strconv.Atoi(profesorID)
+		if err != nil {
+			http.Error(w, "ID de profesor inválido", http.StatusBadRequest)
+			return
+		}
+
+		// Procesar el lote de estudiantes
+		err = dbService.ProcesarLoteEstudiantes(request.Students, request.Curso, profesorIDInt)
+		if err != nil {
+			log.Printf("Error al procesar lote de estudiantes: %v", err)
+			http.Error(w, fmt.Sprintf("Error al procesar estudiantes: %v", err), http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Información recibida correctamente"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "Estudiantes procesados exitosamente"})
 	})
 
 	log.Println("Server started on :8084")
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedOrigins([]string{"http://localhost:8081", "http://localhost:8080", "http://localhost:8088", "http://192.168.206.9:8088"}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-Profesor-ID"}),
+		handlers.AllowCredentials(),
 	)
 	log.Fatal(http.ListenAndServe(":8084", corsHandler(http.DefaultServeMux)))
 }

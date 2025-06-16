@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 )
 
@@ -105,7 +106,7 @@ func (s *DatabaseService) RegisterQRGeneration(profesorID int) (int64, error) {
 // 3. Obtener Secciones.ID y Asignaturas.Nombre usando el ProfesorID
 func (s *DatabaseService) GetSectionsByProfessor(profesorID int) ([]models.SeccionAsignatura, error) {
 	query := `
-		SELECT s.ID, s.AsignaturaID, a.Nombre
+		SELECT s.ID, s.AsignaturaID, a.Nombre, a.Codigo
 		FROM Secciones s
 		JOIN Asignaturas a ON s.AsignaturaID = a.ID
 		WHERE s.ProfesorID = $1
@@ -119,7 +120,7 @@ func (s *DatabaseService) GetSectionsByProfessor(profesorID int) ([]models.Secci
 	var sections []models.SeccionAsignatura
 	for rows.Next() {
 		var sec models.SeccionAsignatura
-		err := rows.Scan(&sec.SeccionID, &sec.AsignaturaID, &sec.Nombre)
+		err := rows.Scan(&sec.SeccionID, &sec.AsignaturaID, &sec.Nombre, &sec.Codigo)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +159,7 @@ func (s *DatabaseService) DeleteManualAttendanceBySection(seccionID int) error {
 // 5. Obtener SeccionesID y nombre de asignaturas con el AlumnoId
 func (s *DatabaseService) GetSectionsByStudent(alumnoID int) ([]models.SeccionAsignatura, error) {
 	query := `
-		SELECT s.ID, s.AsignaturaID, a.Nombre
+		SELECT s.ID, s.AsignaturaID, a.Nombre, a.Codigo
 		FROM Secciones s
 		JOIN Asignaturas a ON s.AsignaturaID = a.ID
 		JOIN Inscripciones i ON s.ID = i.SeccionID
@@ -173,7 +174,7 @@ func (s *DatabaseService) GetSectionsByStudent(alumnoID int) ([]models.SeccionAs
 	var sections []models.SeccionAsignatura
 	for rows.Next() {
 		var sec models.SeccionAsignatura
-		err := rows.Scan(&sec.SeccionID, &sec.AsignaturaID, &sec.Nombre)
+		err := rows.Scan(&sec.SeccionID, &sec.AsignaturaID, &sec.Nombre, &sec.Codigo)
 		if err != nil {
 			return nil, err
 		}
@@ -253,4 +254,118 @@ func ValidateUser(username, password, rol string, db *sql.DB) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// ProcesarLoteEstudiantes procesa un lote de estudiantes y crea el curso
+func (s *DatabaseService) ProcesarLoteEstudiantes(estudiantes []struct {
+	ID             string `json:"id"`
+	Nombre         string `json:"Nombre"`
+	NombreCompleto string `json:"NombreCompleto"`
+	Rut            string `json:"Rut"`
+	Email          string `json:"Email"`
+}, curso struct {
+	Codigo string   `json:"codigo"`
+	Nombre string   `json:"nombre"`
+	Dias   []string `json:"dias"`
+	Bloque string   `json:"bloque"`
+}, profesorID int) error {
+	// Iniciar transacción
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("error al iniciar transacción: %v", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Insertar o actualizar asignatura
+	var asignaturaID int
+	err = tx.QueryRow(`
+		INSERT INTO Asignaturas (Codigo, Nombre)
+		VALUES ($1, $2)
+		ON CONFLICT (Codigo) DO UPDATE
+		SET Nombre = $2
+		RETURNING ID`, curso.Codigo, curso.Nombre).Scan(&asignaturaID)
+	if err != nil {
+		return fmt.Errorf("error al insertar asignatura: %v", err)
+	}
+
+	// 2. Crear sección
+	var seccionID int
+	err = tx.QueryRow(`
+		INSERT INTO Secciones (AsignaturaID, ProfesorID)
+		VALUES ($1, $2)
+		RETURNING ID`, asignaturaID, profesorID).Scan(&seccionID)
+	if err != nil {
+		return fmt.Errorf("error al crear sección: %v", err)
+	}
+
+	// 3. Obtener módulos que coinciden con los días y bloque
+	rows, err := tx.Query(`
+		SELECT ID FROM Modulos 
+		WHERE HoraFin = $1 
+		AND EXTRACT(DOW FROM Fecha) IN (
+			SELECT CASE 
+				WHEN dia = 'Lunes' THEN 1
+				WHEN dia = 'Martes' THEN 2
+				WHEN dia = 'Miércoles' THEN 3
+				WHEN dia = 'Jueves' THEN 4
+				WHEN dia = 'Viernes' THEN 5
+			END
+			FROM unnest($2::text[]) as dia
+		)`, curso.Bloque, pq.Array(curso.Dias))
+	if err != nil {
+		return fmt.Errorf("error al obtener módulos: %v", err)
+	}
+	defer rows.Close()
+
+	var moduloIDs []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("error al escanear módulo: %v", err)
+		}
+		moduloIDs = append(moduloIDs, id)
+	}
+
+	// 4. Crear programación de clases
+	for _, moduloID := range moduloIDs {
+		_, err = tx.Exec(`
+			INSERT INTO ProgramacionClases (SeccionID, ModuloID)
+			VALUES ($1, $2)`, seccionID, moduloID)
+		if err != nil {
+			return fmt.Errorf("error al crear programación: %v", err)
+		}
+	}
+
+	// 5. Insertar o actualizar estudiantes
+	for _, estudiante := range estudiantes {
+		// Insertar estudiante
+		_, err = tx.Exec(`
+			INSERT INTO Alumnos (ID, Rut, Nombre, NombreCompleto, Email)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (ID) DO UPDATE
+			SET Rut = $2, Nombre = $3, NombreCompleto = $4, Email = $5`,
+			estudiante.ID, estudiante.Rut, estudiante.Nombre, estudiante.NombreCompleto, estudiante.Email)
+		if err != nil {
+			return fmt.Errorf("error al insertar estudiante %s: %v", estudiante.ID, err)
+		}
+
+		// Insertar inscripción
+		_, err = tx.Exec(`
+			INSERT INTO Inscripciones (AlumnoID, SeccionID)
+			SELECT $1, $2
+			WHERE NOT EXISTS (
+				SELECT 1 FROM Inscripciones 
+				WHERE AlumnoID = $1 AND SeccionID = $2
+			)`, estudiante.ID, seccionID)
+		if err != nil {
+			return fmt.Errorf("error al inscribir estudiante %s: %v", estudiante.ID, err)
+		}
+	}
+
+	// Confirmar transacción
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("error al confirmar transacción: %v", err)
+	}
+
+	return nil
 }

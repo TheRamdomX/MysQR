@@ -9,11 +9,9 @@ import CryptoJS from 'crypto-js';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-
-const API_URL = 'http://localhost:8088';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const API_URL = 'http://192.168.206.9:8088';
 
 interface Course {
   id: string;
@@ -40,6 +38,7 @@ interface SeccionAsignatura {
   seccion_id: number;
   asignatura_id: number;
   nombre: string;
+  codigo: string;
 }
 
 const encryptQRData = (data: any) => {
@@ -136,7 +135,7 @@ export default function Courses() {
         const cursos = data.map(seccion => ({
             id: seccion.seccion_id.toString(),
             nombre: seccion.nombre,
-            cit: `CIT${seccion.asignatura_id}`,
+            cit: seccion.codigo,
             asistencia: [],
             dias: [],
             bloque: ''
@@ -240,23 +239,72 @@ export default function Courses() {
         const fileName = result.assets[0].name;
         console.log('Nombre del archivo seleccionado:', fileName);
         
-        // Extraer código y sección del nombre del archivo
-        const codigoMatch = fileName.match(/CIT\d+/);
-        const seccionMatch = fileName.match(/CA\d+/);
+        const match = fileName.match(/CIT\d+_CA\d+/);
         
-        if (codigoMatch && seccionMatch) {
-          const codigo = codigoMatch[0];
-          const seccion = seccionMatch[0];
+        if (match) {
+          const codigo = match[0];
           console.log('Código extraído:', codigo);
-          console.log('Sección extraída:', seccion);
           
           setCit(codigo);
-          setNombre(`Sección ${seccion}`);
           setSelectedFile(result);
           setUploadStatus('Archivo seleccionado: ' + fileName);
+
+          try {
+            let fileContent: string;
+            
+            if (Platform.OS === 'web') {
+              // En web, el archivo ya está en memoria como base64
+              const base64Content = result.assets[0].uri.split(',')[1];
+              const binaryString = atob(base64Content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              fileContent = new TextDecoder('utf-8').decode(bytes);
+            } else {
+              fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
+                encoding: FileSystem.EncodingType.UTF8
+              });
+            }
+
+            console.log('Contenido del archivo:', fileContent.substring(0, 200)); // Mostrar los primeros 200 caracteres para debug
+
+            // Obtener las líneas del archivo
+            const lines = fileContent.split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0);
+
+            console.log('Número de líneas encontradas:', lines.length);
+
+            const firstStudentLine = lines.find(line => 
+              !line.includes('Student,ID') && 
+              !line.includes('Points Possible') &&
+              line.includes('"') 
+            );
+
+            console.log('Primera línea de estudiante encontrada:', firstStudentLine);
+
+            if (firstStudentLine) {
+              const matches = firstStudentLine.match(/"([^"]*)",([^,]*),([^,]*),([^,]*),([^,]*)/);
+              if (matches && matches[5]) {
+                const courseName = matches[5].trim();
+                setNombre(courseName);
+                console.log('Nombre del curso extraído:', courseName);
+              } else {
+                console.error('No se pudo extraer el nombre del curso del CSV');
+                setUploadStatus('Error: No se pudo extraer el nombre del curso del CSV');
+              }
+            } else {
+              console.error('No se encontró ninguna línea de estudiante en el CSV');
+              setUploadStatus('Error: No se encontró ninguna línea de estudiante en el CSV');
+            }
+          } catch (error) {
+            console.error('Error al leer el archivo CSV:', error);
+            setUploadStatus('Error al leer el archivo CSV');
+          }
         } else {
-          console.error('Formato de archivo incorrecto. No se encontró código o sección');
-          setUploadStatus('Error: El nombre del archivo no tiene el formato correcto');
+          console.error('Formato de archivo incorrecto. El nombre debe contener el código en formato CIT1000_CA16');
+          setUploadStatus('Error: El nombre del archivo debe contener el código en formato CIT1000_CA16');
           return;
         }
       }
@@ -267,18 +315,14 @@ export default function Courses() {
   };
 
   const cleanStudentData = (student: any) => {
-    // Obtener y limpiar el nombre completo
     const fullName = student.Student?.trim() || '';
     
-    // Ignorar la línea de "Points Possible"
     if (fullName === 'Points Possible') {
       return null;
     }
 
-    // Normalizar caracteres especiales
     const normalizeText = (text: string) => {
       return text
-        // Primero reemplazar los caracteres especiales más comunes
         .replace(/Ã¡/g, 'á')
         .replace(/Ã©/g, 'é')
         .replace(/Ã­/g, 'í')
@@ -291,7 +335,6 @@ export default function Courses() {
         .replace(/Ã"/g, 'Ó')
         .replace(/Ãš/g, 'Ú')
         .replace(/Ã'/g, 'Ñ')
-        // Luego manejar los caracteres especiales con escape
         .replace(/\\x81/g, 'Á')
         .replace(/\\x8D/g, 'Í')
         .replace(/\\x93/g, 'Ó')
@@ -302,13 +345,11 @@ export default function Courses() {
         .replace(/\\x93N/g, 'ÓN')
         .replace(/\\x9AS/g, 'ÚS')
         .replace(/\\x91O/g, 'ÑO')
-        // Eliminar comillas y espacios extra
         .replace(/"/g, '')
         .replace(/\s+/g, ' ')
         .trim();
     };
 
-    // Separar nombre y apellido
     const nameParts = fullName.split(',').map((part: string) => normalizeText(part.trim()));
     if (nameParts.length < 2) {
       console.warn('Formato de nombre inválido:', fullName);
@@ -317,33 +358,25 @@ export default function Courses() {
 
     const apellido = nameParts[0];
     const nombre = nameParts[1];
+    const nombreCompleto = `${nombre} ${apellido}`;
+    const primerNombre = nombre.split(' ')[0]; // Extraer solo el primer nombre
 
-    // Normalizar el ID y otros campos
     const id = student.ID?.trim() || '';
     const sisUserId = student['SIS User ID']?.trim() || '';
     const sisLoginId = student['SIS Login ID']?.trim() || '';
-    const seccion = normalizeText(student.Section?.trim() || '');
-
-    // Validar que los campos requeridos no estén vacíos
-    if (!id || !nombre || !apellido) {
-      console.warn('Datos incompletos para el estudiante:', { id, nombre, apellido });
-      return null;
-    }
 
     console.log('Datos del estudiante procesados:', {
-      nombreCompleto: fullName,
-      nombre: nombre,
-      apellido: apellido,
-      id: id
+      id: id,
+      nombreCompleto: nombreCompleto,
+      primerNombre: primerNombre
     });
 
     return {
-      nombre: nombre,
-      apellido: apellido,
       id: id,
-      sis_user_id: sisUserId,
-      sis_login_id: sisLoginId,
-      seccion: seccion
+      Nombre: primerNombre,
+      NombreCompleto: nombreCompleto,
+      Rut: sisUserId,
+      Email: sisLoginId
     };
   };
 
@@ -454,7 +487,7 @@ export default function Courses() {
             codigo: cit,
             nombre: nombre,
             dias: diasSeleccionados,
-            bloque: bloqueSeleccionado
+            bloque: bloqueSeleccionado ? bloqueSeleccionado.slice(-5) : ''
           }
         }, null, 2));
 
@@ -464,6 +497,7 @@ export default function Courses() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'X-Profesor-ID': userData?.profesorId || ''
             },
             body: JSON.stringify({ 
               students: batchData,
@@ -471,7 +505,7 @@ export default function Courses() {
                 codigo: cit,
                 nombre: nombre,
                 dias: diasSeleccionados,
-                bloque: bloqueSeleccionado
+                bloque: bloqueSeleccionado ? bloqueSeleccionado.slice(-5) : ''
               }
             }),
           });

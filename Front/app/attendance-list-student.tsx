@@ -7,7 +7,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.206.9:8088';
 
 
 interface Attendance {

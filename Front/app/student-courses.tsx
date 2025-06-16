@@ -2,15 +2,16 @@ import { AntDesign } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { GestureHandlerRootView, State } from 'react-native-gesture-handler';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
 import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.206.9:8088';
 
 interface Course {
   id: string;
@@ -53,6 +54,9 @@ export default function CoursesStudent() {
   const [scanned, setScanned] = useState(false);
   const [scannedData, setScannedData] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
+  const [zoom, setZoom] = useState(0);
+  const [lastZoom, setLastZoom] = useState(0);
+  const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
     const loadStudentSections = async () => {
@@ -196,74 +200,177 @@ export default function CoursesStudent() {
     );
   };
 
+  // Función para manejar el gesto de pinch (zoom)
+  const onPinchGestureEvent = (event: any) => {
+    const { scale } = event.nativeEvent;
+    const newZoom = Math.min(Math.max(lastZoom * scale, 0), 1);
+    setZoom(newZoom);
+  };
+
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      setLastZoom(zoom);
+    }
+  };
+
+  // Función para manejar tap to focus
+  const handleTapToFocus = async (event: any) => {
+    if (!cameraRef.current) return;
+    
+    const { locationX, locationY } = event.nativeEvent;
+    
+    try {
+      const normalizedX = locationX / (event.nativeEvent.target?.layout?.width || 1) || 0.5;
+      const normalizedY = locationY / (event.nativeEvent.target?.layout?.height || 1) || 0.5;
+      console.log(`Enfocando en: ${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)}`);
+    } catch (error) {
+      console.error('Error al enfocar:', error);
+    }
+  };
+
+  // Controles manuales de zoom
+  const zoomIn = () => {
+    setZoom(Math.min(zoom + 0.1, 1));
+  };
+
+  const zoomOut = () => {
+    setZoom(Math.max(zoom - 0.1, 0));
+  };
+
+  const resetZoom = () => {
+    setZoom(0);
+  };
+
   return (
-    <ProtectedRoute allowedRoles={['alumno', 'student']}>
-      <View style={styles.mainContainer}>
-        <View style={styles.header}>
-          <Image
-            source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
-            style={styles.image}
-            resizeMode="contain"
-          />
-          <Text style={styles.headerText}>Tus Cursos</Text>
-          <View style={styles.horaContainer}>
-            <Text style={styles.horaText}>{hora}</Text>
-          </View>
-        </View>
-        <View style={styles.container}>
-          <FlatList
-            data={courses}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-            numColumns={getNumColumns()}
-            contentContainerStyle={styles.list}
-          />
-        </View>
-        <TouchableOpacity
-          style={styles.qrButton}
-          onPress={() => {
-            setScanned(false);
-            setScannedData('');
-            setQrVisible(true);
-          }}
-        >
-          <Text style={styles.qrButtonText}>Escanear QR</Text>
-        </TouchableOpacity>
-        <Modal visible={qrVisible} transparent animationType="fade">
-          <View style={styles.modalContainer}>
-            <View style={styles.qrModalContent}>
-              <TouchableOpacity style={styles.closeIcon} onPress={() => setQrVisible(false)}>
-                <AntDesign name="close" size={35} color="#fff" />
-              </TouchableOpacity>
-              {!permission ? (
-                <View style={styles.permissionContainer}>
-                  <Text style={styles.permissionText}>Loading...</Text>
-                </View>
-              ) : !permission.granted ? (
-                <View style={styles.permissionContainer}>
-                  <Text style={styles.permissionText}>We need your permission to show the camera</Text>
-                  <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-                    <Text style={styles.permissionButtonText}>Grant Permission</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <CameraView
-                  style={styles.camera}
-                  barcodeScannerSettings={{
-                    barcodeTypes: ['qr'],
-                  }}
-                  onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-                >
-                  <View style={styles.overlay}>
-                    <View style={styles.scanFrame} />
-                  </View>
-                </CameraView>
-              )}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ProtectedRoute allowedRoles={['alumno', 'student']}>
+        <View style={styles.mainContainer}>
+          <View style={styles.header}>
+            <Image
+              source={{ uri: 'https://www.udp.cl/cms/wp-content/uploads/2021/06/UDP_LogoRGB_2lineas_Blanco_SinFondo.png ' }}
+              style={styles.image}
+              resizeMode="contain"
+            />
+            <Text style={styles.headerText}>Tus Cursos</Text>
+            <View style={styles.horaContainer}>
+              <Text style={styles.horaText}>{hora}</Text>
             </View>
           </View>
-        </Modal>
-      </View>
-    </ProtectedRoute>
+          <View style={styles.container}>
+            <FlatList
+              data={courses}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              numColumns={getNumColumns()}
+              contentContainerStyle={styles.list}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.qrButton}
+            onPress={() => {
+              setScanned(false);
+              setScannedData('');
+              setQrVisible(true);
+            }}
+          >
+            <Text style={styles.qrButtonText}>Escanear QR</Text>
+          </TouchableOpacity>
+          <Modal visible={qrVisible} transparent animationType="fade">
+            <View style={styles.modalContainer}>
+              <View style={styles.qrModalContent}>
+                <TouchableOpacity 
+                  style={styles.closeIcon} 
+                  onPress={() => {
+                    setQrVisible(false);
+                    setZoom(0);
+                  }}
+                >
+                  <AntDesign name="close" size={35} color="#fff" />
+                </TouchableOpacity>
+                
+                {!permission ? (
+                  <View style={styles.permissionContainer}>
+                    <Text style={styles.permissionText}>Cargando cámara...</Text>
+                  </View>
+                ) : !permission.granted ? (
+                  <View style={styles.permissionContainer}>
+                    <Text style={styles.permissionText}>
+                      Necesitamos permisos para usar la cámara
+                    </Text>
+                    <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                      <Text style={styles.permissionButtonText}>Conceder Permisos</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <CameraView
+                    ref={cameraRef}
+                    style={styles.camera}
+                    zoom={zoom}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ['qr'],
+                    }}
+                    onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                  >
+                    <View style={styles.overlay}>
+                      <View style={styles.scanFrame} />
+                      
+                      <View style={styles.zoomIndicator}>
+                        <Text style={styles.zoomText}>
+                          {Math.round(zoom * 100)}%
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.zoomControls}>
+                        <TouchableOpacity 
+                          style={[styles.zoomButton, { opacity: zoom <= 0 ? 0.5 : 1 }]} 
+                          onPress={zoomOut}
+                          disabled={zoom <= 0}
+                        >
+                          <AntDesign name="minus" size={20} color="white" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={styles.resetZoomButton} 
+                          onPress={resetZoom}
+                        >
+                          <Text style={styles.resetZoomText}>Reset</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.zoomButton, { opacity: zoom >= 1 ? 0.5 : 1 }]} 
+                          onPress={zoomIn}
+                          disabled={zoom >= 1}
+                        >
+                          <AntDesign name="plus" size={20} color="white" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.instructionsContainer}>
+                        <Text style={styles.instructionText}>
+                          • Toca para enfocar
+                        </Text>
+                        <Text style={styles.instructionText}>
+                          • Pellizca para hacer zoom
+                        </Text>
+                        <Text style={styles.instructionText}>
+                          • Apunta al código QR
+                        </Text>
+                      </View>
+                      
+                      {scanned && (
+                        <View style={styles.statusContainer}>
+                          <Text style={styles.statusText}>✓ QR Escaneado</Text>
+                        </View>
+                      )}
+                    </View>
+                  </CameraView>
+                )}
+              </View>
+            </View>
+          </Modal>
+        </View>
+      </ProtectedRoute>
+    </GestureHandlerRootView>
   );
 }
 
@@ -487,5 +594,81 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  // Nuevos estilos para el zoom y controles de cámara
+  zoomIndicator: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  zoomText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  zoomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 10,
+    borderRadius: 25,
+    alignSelf: 'center',
+    marginBottom: 80,
+  },
+  zoomButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  resetZoomButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 15,
+    marginHorizontal: 8,
+  },
+  resetZoomText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  instructionsContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 10,
+    borderRadius: 10,
+  },
+  instructionText: {
+    color: 'white',
+    fontSize: 12,
+    textAlign: 'center',
+    marginVertical: 2,
+  },
+  statusContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,128,0,0.8)',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
