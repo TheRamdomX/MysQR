@@ -7,43 +7,44 @@ CREATE TABLE IF NOT EXISTS Profesores (
 );
 
 CREATE TABLE IF NOT EXISTS Alumnos (
-                                       ID int PRIMARY KEY,
-                                       Rut int,
-                                       Nombre varchar,
-                                       Apellido varchar
+    ID int PRIMARY KEY,
+    Rut int,
+    Nombre varchar,
+    NombreCompleto varchar,
+    Email varchar
 );
 
 CREATE TABLE IF NOT EXISTS Asignaturas (
-                                           ID int PRIMARY KEY,
-                                           Nombre varchar,
-                                           Codigo varchar
+    ID SERIAL PRIMARY KEY,
+    Codigo VARCHAR(20) UNIQUE NOT NULL,
+    Nombre VARCHAR(100) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS Secciones (
-                                         ID int PRIMARY KEY,
+                                         ID SERIAL PRIMARY KEY,
                                          AsignaturaID int,
                                          ProfesorID int,
                                          Ubicacion varchar
 );
 
 CREATE TABLE IF NOT EXISTS Modulos (
-                                       ID int PRIMARY KEY,
-                                       Fecha date,
-                                       HoraInicio time,
-                                       HoraFin time
+    ID int PRIMARY KEY,
+    Fecha date,
+    HoraInicio time,
+    HoraFin time
 );
 
 CREATE TABLE IF NOT EXISTS ProgramacionClases (
-                                                  ID int PRIMARY KEY,
-                                                  SeccionID int,
-                                                  ModuloID int,
-                                                  TipoSesion int
+    ID int PRIMARY KEY,
+    SeccionID int,
+    ModuloID int,
+    TipoSesion int
 );
 
 CREATE TABLE IF NOT EXISTS Inscripciones (
-                                             ID int PRIMARY KEY,
-                                             AlumnoID int,
-                                             SeccionID int
+    ID int PRIMARY KEY,
+    AlumnoID int,
+    SeccionID int
 );
 
 CREATE TABLE IF NOT EXISTS Asistencia (
@@ -257,6 +258,18 @@ FOR VALUES IN (4);
 CREATE TABLE asistencia_5 PARTITION OF asistencia
 FOR VALUES IN (5);
 
+CREATE TABLE asistencia_9 PARTITION OF asistencia
+FOR VALUES IN (9);
+
+CREATE TABLE asistencia_10 PARTITION OF asistencia
+FOR VALUES IN (10);
+
+CREATE TABLE asistencia_11 PARTITION OF asistencia
+FOR VALUES IN (11);
+
+CREATE TABLE asistencia_12 PARTITION OF asistencia
+FOR VALUES IN (12);
+
 CREATE TABLE reporte_asistencia_1 PARTITION OF ReporteAsistencia
 FOR VALUES IN (1);
 
@@ -271,6 +284,18 @@ FOR VALUES IN (4);
 
 CREATE TABLE reporte_asistencia_5 PARTITION OF ReporteAsistencia
 FOR VALUES IN (5);
+
+CREATE TABLE reporte_asistencia_9 PARTITION OF ReporteAsistencia
+FOR VALUES IN (9);
+
+CREATE TABLE reporte_asistencia_10 PARTITION OF ReporteAsistencia
+FOR VALUES IN (10);
+
+CREATE TABLE reporte_asistencia_11 PARTITION OF ReporteAsistencia
+FOR VALUES IN (11);
+
+CREATE TABLE reporte_asistencia_12 PARTITION OF ReporteAsistencia
+FOR VALUES IN (12);
 
 -- Insertar registros de asistencia
 INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd) VALUES
@@ -349,13 +374,13 @@ SELECT jsonb_agg(estudiante_data) INTO reporte
 FROM (
          SELECT
              a.ID as estudiante_id,
-             a.Nombre || ' ' || a.Apellido AS estudiante,
+             a.NombreCompleto AS estudiante,
              jsonb_object_agg(
                  to_char(m.Fecha, 'MM-DD'),
                  jsonb_build_object(
                      'estado', CASE
-                         WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
-                         ELSE '🔴'
+                                  WHEN ra.EstadoSesion ILIKE 'presente' THEN '🟢'
+                                  ELSE '🔴'
                      END,
                      'alumno_id', a.ID,
                      'modulo_id', m.ID
@@ -365,8 +390,8 @@ FROM (
                   JOIN Alumnos a ON a.ID = ra.AlumnoID
                   JOIN Modulos m ON m.ID = ra.ModuloID
          WHERE ra.SeccionID = seccion_id_input
-         GROUP BY a.ID, a.Nombre, a.Apellido
-         ORDER BY a.Nombre, a.Apellido
+         GROUP BY a.ID, a.NombreCompleto
+         ORDER BY a.NombreCompleto
      ) AS estudiante_data;
 
 RETURN reporte;
@@ -423,7 +448,7 @@ WHERE ra.AlumnoID = a.AlumnoID
 
 -- Paso 3: Generar el JSON final
 SELECT jsonb_build_object(
-               'estudiante', a.Nombre || ' ' || a.Apellido,
+               'estudiante', a.NombreCompleto,
                'asistencia', COALESCE(
                        jsonb_object_agg(
                                to_char(m.Fecha, 'MM-DD'),
@@ -441,12 +466,12 @@ FROM ReporteAsistencia ra
          JOIN Modulos m ON m.ID = ra.ModuloID
 WHERE ra.SeccionID = seccion_id_input
   AND ra.AlumnoID = alumno_id_input
-GROUP BY a.ID, a.Nombre, a.Apellido;
+GROUP BY a.ID, a.NombreCompleto;
 
 -- Si no hay datos, devolver un objeto con asistencia vacía
 IF reporte IS NULL THEN
 SELECT jsonb_build_object(
-               'estudiante', (SELECT Nombre || ' ' || Apellido FROM Alumnos WHERE ID = alumno_id_input),
+               'estudiante', (SELECT NombreCompleto FROM Alumnos WHERE ID = alumno_id_input),
                'asistencia', '{}'::jsonb
        ) INTO reporte;
 END IF;

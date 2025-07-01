@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -329,11 +330,78 @@ func main() {
 		w.Write(reporte)
 	})
 
+	// 7. Procesar estudiantes en lotes
+	http.HandleFunc("/api/db/sections/students/batch", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Recibida petición POST en /api/db/sections/students/batch")
+
+		if r.Method != http.MethodPost {
+			log.Printf("Método no permitido: %s", r.Method)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Leer el cuerpo de la petición
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error al leer el cuerpo de la petición: %v", err)
+			http.Error(w, "Error reading request body", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Cuerpo de la petición recibido: %s", string(body))
+
+		var request struct {
+			Students []struct {
+				ID             string `json:"id"`
+				Nombre         string `json:"Nombre"`
+				NombreCompleto string `json:"NombreCompleto"`
+				Rut            string `json:"Rut"`
+				Email          string `json:"Email"`
+			} `json:"students"`
+			Curso struct {
+				Codigo string   `json:"codigo"`
+				Nombre string   `json:"nombre"`
+				Dias   []string `json:"dias"`
+				Bloque string   `json:"bloque"`
+			} `json:"curso"`
+		}
+
+		if err := json.Unmarshal(body, &request); err != nil {
+			log.Printf("Error al decodificar JSON: %v", err)
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Obtener el ID del profesor del token o header
+		profesorID := r.Header.Get("X-Profesor-ID")
+		if profesorID == "" {
+			http.Error(w, "ID de profesor no proporcionado", http.StatusBadRequest)
+			return
+		}
+
+		profesorIDInt, err := strconv.Atoi(profesorID)
+		if err != nil {
+			http.Error(w, "ID de profesor inválido", http.StatusBadRequest)
+			return
+		}
+
+		// Procesar el lote de estudiantes
+		err = dbService.ProcesarLoteEstudiantes(request.Students, request.Curso, profesorIDInt)
+		if err != nil {
+			log.Printf("Error al procesar lote de estudiantes: %v", err)
+			http.Error(w, fmt.Sprintf("Error al procesar estudiantes: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Estudiantes procesados exitosamente"})
+	})
+
 	log.Println("Server started on :8084")
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedOrigins([]string{"http://localhost:8081", "http://localhost:8080", "http://localhost:8088", "http://192.168.206.9:8088"}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-Profesor-ID"}),
+		handlers.AllowCredentials(),
 	)
 	log.Fatal(http.ListenAndServe(":8084", corsHandler(http.DefaultServeMux)))
 }

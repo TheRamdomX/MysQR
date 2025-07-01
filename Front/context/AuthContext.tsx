@@ -26,7 +26,7 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
-const API_URL = 'http://localhost:8088';
+const API_URL = 'http://192.168.100.54:8088';
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);

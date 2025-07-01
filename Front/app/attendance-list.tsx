@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
+import { AntDesign } from '@expo/vector-icons';
+import * as XLSX from 'xlsx';
 
-const API_URL = 'http://localhost:8088';
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
+const API_URL = 'http://192.168.206.9:8088';
 
 interface Attendance {
   [key: string]: {
@@ -64,7 +68,14 @@ export default function AttendanceList() {
     fetchAttendanceData();
   }, [courseId]);
 
-  // Función para calcular el porcentaje de asistencia
+  // Función para calcular el porcentaje de asistencia de un estudiante
+  const calcularPorcentajeEstudiante = (student: Student) => {
+    const total = dates.length;
+    const presentes = dates.filter(date => student.asistencia[date]?.estado === '🟢').length;
+    return total === 0 ? 0 : Math.round((presentes / total) * 100);
+  };
+
+  // Función para calcular el porcentaje general de asistencia
   const calcularPorcentajeAsistencia = () => {
     let total = 0;
     let presentes = 0;
@@ -173,6 +184,76 @@ export default function AttendanceList() {
     }
   };
 
+  const descargarExcel = async () => {
+    try {
+      // Crear el array de datos para el Excel
+      const data = [];
+      
+      // Agregar los encabezados
+      const headers = ['Estudiante', 'Porcentaje Asistencia', ...dates];
+      data.push(headers);
+
+      // Agregar los datos de cada estudiante
+      students.forEach((student, index) => {
+        // Crear la fórmula para calcular el porcentaje
+        // La fórmula contará los "🟢" y dividirá por el total de fechas
+        const startCol = 3; // Columna C (primera fecha)
+        const endCol = 2 + dates.length; // Última columna de fechas
+        const row = index + 2; // +2 porque la primera fila es el encabezado y Excel es 1-based
+        
+        const formula = `=ROUND(COUNTIF(C${row}:${String.fromCharCode(64 + endCol)}${row},"🟢")/${dates.length}*100,0)`;
+
+        const rowData = [
+          student.estudiante,
+          { t: 'f', f: formula }, // Fórmula de Excel
+          ...dates.map(date => student.asistencia[date]?.estado || '❌')
+        ];
+        data.push(rowData);
+      });
+
+      // Crear el libro de Excel
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      
+      // Ajustar el ancho de las columnas
+      const colWidths = [
+        { wch: 30 }, // Columna de nombres
+        { wch: 20 }, // Columna de porcentaje
+        ...dates.map(() => ({ wch: 15 })) // Columnas de fechas
+      ];
+      ws['!cols'] = colWidths;
+
+      // Crear el libro
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
+
+      // Generar el archivo
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      
+      // Convertir a Blob
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      // Crear el enlace de descarga
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      // Configurar el enlace
+      link.setAttribute('href', url);
+      link.setAttribute('download', `asistencia_${courseId}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.style.visibility = 'hidden';
+      
+      // Agregar el enlace al documento y simular el clic
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpiar
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error al descargar el archivo:', error);
+      alert('Error al descargar el archivo');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -227,9 +308,6 @@ export default function AttendanceList() {
                 <>
                   <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                     <Text style={styles.saveButtonText}>Guardar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                    <Text style={styles.cancelButtonText}>Cancelar</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -300,6 +378,15 @@ export default function AttendanceList() {
               </ScrollView>
             </View>
           </ScrollView>
+        </View>
+
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={descargarExcel}
+          >
+            <AntDesign name="download" size={56} color="#8B0000" />
+          </TouchableOpacity>
         </View>
       </View>
     </ProtectedRoute>
@@ -556,5 +643,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
     textAlign: 'center',
+  },
+  addButtonContainer: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    alignItems: 'flex-end',
+  },
+  addButton: {
+    backgroundColor: 'transparent',
+    padding: 0,
+  },
+  buttonPressed: {
+    backgroundColor: '#c4b9b9',
+    transform: [{ scale: 1 }],
   },
 });
