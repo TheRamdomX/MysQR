@@ -258,6 +258,18 @@ FOR VALUES IN (4);
 CREATE TABLE asistencia_5 PARTITION OF asistencia
 FOR VALUES IN (5);
 
+CREATE TABLE asistencia_9 PARTITION OF asistencia
+FOR VALUES IN (9);
+
+CREATE TABLE asistencia_10 PARTITION OF asistencia
+FOR VALUES IN (10);
+
+CREATE TABLE asistencia_11 PARTITION OF asistencia
+FOR VALUES IN (11);
+
+CREATE TABLE asistencia_12 PARTITION OF asistencia
+FOR VALUES IN (12);
+
 CREATE TABLE reporte_asistencia_1 PARTITION OF ReporteAsistencia
 FOR VALUES IN (1);
 
@@ -275,6 +287,15 @@ FOR VALUES IN (5);
 
 CREATE TABLE reporte_asistencia_9 PARTITION OF ReporteAsistencia
 FOR VALUES IN (9);
+
+CREATE TABLE reporte_asistencia_10 PARTITION OF ReporteAsistencia
+FOR VALUES IN (10);
+
+CREATE TABLE reporte_asistencia_11 PARTITION OF ReporteAsistencia
+FOR VALUES IN (11);
+
+CREATE TABLE reporte_asistencia_12 PARTITION OF ReporteAsistencia
+FOR VALUES IN (12);
 
 -- Insertar registros de asistencia
 INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd) VALUES
