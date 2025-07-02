@@ -369,3 +369,41 @@ func (s *DatabaseService) ProcesarLoteEstudiantes(estudiantes []struct {
 
 	return nil
 }
+
+// RegistrarAlumno crea un alumno, sus credenciales y lo inscribe en una sección
+func (s *DatabaseService) RegistrarAlumno(username, password, nombre string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Insertar en Alumnos
+	var alumnoID int
+	err = tx.QueryRow(`
+		INSERT INTO Alumnos (id,NombreCompleto) VALUES ((select max(id) from alumnos)+1,$1) RETURNING ID
+	`, nombre).Scan(&alumnoID)
+	if err != nil {
+		return fmt.Errorf("error al crear alumno: %v", err)
+	}
+
+	// 2. Insertar en AUTH
+	_, err = tx.Exec(`
+		INSERT INTO AUTH (username, password_hash, rol, AlumnoID, ProfesorID, Rut)
+		VALUES ($1, $2, 'alumno', $3, NULL, 0)
+	`, username, password, alumnoID)
+	if err != nil {
+		return fmt.Errorf("error al crear credenciales: %v", err)
+	}
+
+	// 3. Inscribir en la sección
+	_, err = tx.Exec(`
+		INSERT INTO Inscripciones (AlumnoID, SeccionID)
+		VALUES ($1, 50)
+	`, alumnoID)
+	if err != nil {
+		return fmt.Errorf("error al inscribir alumno: %v", err)
+	}
+
+	return tx.Commit()
+}

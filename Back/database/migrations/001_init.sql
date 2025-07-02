@@ -138,15 +138,10 @@ INSERT INTO Alumnos (ID, Rut, Nombre, Apellido) VALUES
 
 -- Insertar asignaturas
 INSERT INTO Asignaturas (ID, Nombre, Codigo) VALUES
-                                                 (1, 'Programación I', 'PROG101'),
-                                                 (2, 'Bases de Datos', 'BD101'),
-                                                 (3, 'Redes', 'RED101');
+                                                 (50, 'MysQR', 'Feria01');
 
--- Insertar secciones (relacionan asignaturas y profesores)
 INSERT INTO Secciones (ID, AsignaturaID, ProfesorID, Ubicacion) VALUES
-                                                                    (1, 1, 1, 'Sala 101'),
-                                                                    (2, 2, 2, 'Sala 102'),
-                                                                    (3, 3, 3, 'Sala 201');
+                                                                    (50, 50, 1, 'Sala Estudio');
 
 
 -- Insertar módulos
@@ -181,9 +176,10 @@ INSERT INTO Modulos (ID, Fecha, HoraInicio, HoraFin) VALUES
                                                          (28, CURRENT_DATE - 2, '17:30', '19:00');
 
 -- Insertar programación de clases
-INSERT INTO ProgramacionClases (ID, SeccionID, ModuloID, TipoSesion) VALUES
-                                                                         (1, 1, 1, 1),
-                                                                         (2, 1, 2, 1),
+INSERT INTO ProgramacionClases (SeccionID, ModuloID, TipoSesion) VALUES
+                                                                         (50, 189, 1),
+                                                                         ( 50, 190, 1),
+                                                                         (50, 191, 1);
                                                                          (3, 1, 3, 1),
                                                                          (4, 1, 4, 1),
                                                                          (5, 2, 5, 1),
@@ -197,11 +193,11 @@ INSERT INTO ProgramacionClases (ID, SeccionID, ModuloID, TipoSesion) VALUES
 
 -- Insertar inscripciones de alumnos en secciones
 INSERT INTO Inscripciones (ID, AlumnoID, SeccionID) VALUES
-                                                        (1, 1, 1),
-                                                        (2, 2, 1),
-                                                        (3, 3, 1),
-                                                        (4, 4, 1),
-                                                        (5, 5, 1),
+                                                        ( 1, 50),
+                                                        (2, 50),
+                                                        (3, 50),
+                                                        (4, 50),
+                                                        (5, 50);
                                                         (6, 1, 2),
                                                         (7, 2, 2),
                                                         (8, 3, 2),
@@ -297,7 +293,68 @@ FOR VALUES IN (11);
 CREATE TABLE reporte_asistencia_12 PARTITION OF ReporteAsistencia
 FOR VALUES IN (12);
 
--- Insertar registros de asistencia
+CREATE TABLE reporte_asistencia_13 PARTITION OF ReporteAsistencia
+FOR VALUES IN (13);
+
+CREATE TABLE reporte_asistencia_14 PARTITION OF ReporteAsistencia
+FOR VALUES IN (14);
+
+CREATE TABLE reporte_asistencia_15 PARTITION OF ReporteAsistencia
+FOR VALUES IN (15);
+
+CREATE TABLE reporte_asistencia_16 PARTITION OF ReporteAsistencia
+FOR VALUES IN (16);
+
+CREATE TABLE reporte_asistencia_17 PARTITION OF ReporteAsistencia
+FOR VALUES IN (17);
+
+CREATE TABLE reporte_asistencia_18 PARTITION OF ReporteAsistencia
+FOR VALUES IN (18);
+
+CREATE TABLE reporte_asistencia_19 PARTITION OF ReporteAsistencia
+FOR VALUES IN (19);
+
+
+CREATE TABLE reporte_asistencia_20 PARTITION OF ReporteAsistencia
+FOR VALUES IN (20);
+
+CREATE TABLE reporte_asistencia_21 PARTITION OF ReporteAsistencia
+FOR VALUES IN (21);
+
+
+CREATE TABLE asistencia_14 PARTITION OF asistencia
+FOR VALUES IN (14);
+
+CREATE TABLE asistencia_15 PARTITION OF asistencia
+FOR VALUES IN (15);
+
+CREATE TABLE asistencia_16 PARTITION OF asistencia
+FOR VALUES IN (16);
+
+CREATE TABLE asistencia_17 PARTITION OF asistencia
+FOR VALUES IN (17);
+
+CREATE TABLE asistencia_18 PARTITION OF asistencia
+FOR VALUES IN (18);
+
+CREATE TABLE asistencia_19 PARTITION OF asistencia
+FOR VALUES IN (19);
+
+CREATE TABLE asistencia_20 PARTITION OF asistencia
+FOR VALUES IN (20);
+
+CREATE TABLE asistencia_21 PARTITION OF asistencia
+FOR VALUES IN (21);
+
+CREATE TABLE asistencia_50 PARTITION OF asistencia
+FOR VALUES IN (50);
+
+CREATE TABLE reporte_asistencia_50 PARTITION OF ReporteAsistencia
+FOR VALUES IN (50);
+
+
+
+    -- Insertar registros de asistencia
 INSERT INTO Asistencia (ID, AlumnoID, SeccionID, ModuloID, FechaRegistro, ManualInd) VALUES
                                                                                          (1, 1, 1, 1, CURRENT_TIMESTAMP, 0),
                                                                                          (2, 2, 1, 1, CURRENT_TIMESTAMP, 0),
@@ -322,10 +379,8 @@ INSERT INTO LogIn (ID, Rol, FechaRegistro, Rut, MAC) VALUES
 
 -- Insertar usuarios en AUTH
 INSERT INTO AUTH (username, password_hash, rol, ProfesorID, AlumnoID, Rut)
-VALUES ('profesor1', 'password', 'profesor', 1, NULL, 11111111),
-       ('profesor2', 'password', 'profesor', 2, NULL, 22222222),
-       ('alumno1', 'password', 'alumno', NULL, 1, 33333333),
-       ('alumno2', 'password', 'alumno', NULL, 2, 44444444);
+VALUES ('MysQR', 'password', 'profesor', 50, NULL, 11111111);
+
 
 -- Insertar direcciones MAC de alumnos
 INSERT INTO MACs (ID, AlumnoID, FechaRegistro, MAC) VALUES

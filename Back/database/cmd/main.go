@@ -396,6 +396,33 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"message": "Estudiantes procesados exitosamente"})
 	})
 
+	// Endpoint para registrar alumno
+	http.HandleFunc("/api/db/alumno/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Nombre   string `json:"nombre"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		err := dbService.RegistrarAlumno(req.Username, req.Password, req.Nombre)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Alumno registrado correctamente"})
+	})
+
 	log.Println("Server started on :8084")
 	corsHandler := handlers.CORS(
 		handlers.AllowedOrigins([]string{"http://localhost:8081", "http://localhost:8080", "http://localhost:8088", "http://192.168.206.9:8088"}),

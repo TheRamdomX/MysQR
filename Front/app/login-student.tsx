@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
 import PublicRoute from '../components/PublicRoute';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,6 +12,11 @@ export default function LoginScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
     const { login } = useAuth();
+    const [showRegister, setShowRegister] = useState(false);
+    const [regNombre, setRegNombre] = useState('');
+    const [regUsuario, setRegUsuario] = useState('');
+    const [regPassword, setRegPassword] = useState('');
+    const [regLoading, setRegLoading] = useState(false);
 
     const handleLogin = async () => {
         if (!usuario.trim() || !contrasena.trim()) {
@@ -72,6 +77,38 @@ export default function LoginScreen() {
         }
     };
 
+    const handleRegister = async () => {
+        if (!regNombre.trim() || !regUsuario.trim() || !regPassword.trim()) {
+            Alert.alert('Error', 'Por favor, complete todos los campos de registro.');
+            return;
+        }
+        setRegLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/api/db/alumno/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nombre: regNombre,
+                    username: regUsuario,
+                    password: regPassword,
+                    rol: 'alumno'
+                })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                Alert.alert('Éxito', 'Usuario registrado correctamente.');
+                setShowRegister(false);
+                setRegNombre(''); setRegUsuario(''); setRegPassword('');
+            } else {
+                Alert.alert('Error', data.error || 'No se pudo registrar el usuario.');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Error de red o del servidor.');
+        } finally {
+            setRegLoading(false);
+        }
+    };
+
     return (
         <PublicRoute>
             <ImageBackground
@@ -110,6 +147,41 @@ export default function LoginScreen() {
                     </View>
                 </View>
             </ImageBackground>
+            <Modal visible={showRegister} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Registrar Usuario</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nombre Completo"
+                            value={regNombre}
+                            onChangeText={setRegNombre}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nombre de Usuario"
+                            value={regUsuario}
+                            onChangeText={setRegUsuario}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Contraseña"
+                            value={regPassword}
+                            onChangeText={setRegPassword}
+                            secureTextEntry
+                        />
+                        <TouchableOpacity style={styles.loginButton} onPress={handleRegister} disabled={regLoading}>
+                            <Text style={styles.loginButtonText}>{regLoading ? 'Registrando...' : 'Registrar'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.cancelButton} onPress={() => setShowRegister(false)}>
+                            <Text style={styles.cancelButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+            <TouchableOpacity style={styles.fab} onPress={() => setShowRegister(true)}>
+                <Text style={styles.fabText}>＋</Text>
+            </TouchableOpacity>
         </PublicRoute>
     );
 }
@@ -175,6 +247,54 @@ const styles = StyleSheet.create({
     link: { 
         color:'#1976D2', 
         marginTop:15 
-    }
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 30,
+        backgroundColor: '#8B0000',
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        zIndex: 10,
+    },
+    fabText: {
+        color: 'white',
+        fontSize: 36,
+        fontWeight: 'bold',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 24,
+        width: 320,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 16,
+    },
+    cancelButton: {
+        marginTop: 10,
+        backgroundColor: '#ccc',
+        padding: 10,
+        borderRadius: 8,
+        width: '100%',
+        alignItems: 'center',
+    },
+    cancelButtonText: {
+        color: '#333',
+        fontWeight: 'bold',
+    },
 }); 
 
