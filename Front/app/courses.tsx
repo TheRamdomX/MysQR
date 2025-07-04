@@ -84,6 +84,7 @@ export default function Courses() {
         const storedData = await AsyncStorage.getItem('userData');
         if (storedData) {
           const parsedData = JSON.parse(storedData);
+          console.log('UserData cargado desde AsyncStorage:', parsedData);
           setUserData(parsedData);
           // Cargar datos de la clase actual
           await loadCurrentClass(parsedData.profesorId);

@@ -26,13 +26,13 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
-const API_URL = 'http://192.168.100.54:8088';
+const API_URL = 'http://192.168.206.9:8088';
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [userToken, setUserToken] = useState<string | null>(null);
     const [userData, setUserData] = useState<UserData | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
     // Verificar si el usuario está autenticado al iniciar la app
     useEffect(() => {
@@ -83,6 +83,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const login = async (token: string, userData: UserData): Promise<void> => {
         try {
+            // Limpiar datos antiguos antes de guardar los nuevos
+            await AsyncStorage.removeItem('userToken');
+            await AsyncStorage.removeItem('userData');
             await AsyncStorage.setItem('userToken', token);
             await AsyncStorage.setItem('userData', JSON.stringify(userData));
             

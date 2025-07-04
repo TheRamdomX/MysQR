@@ -48,13 +48,14 @@ export default function LoginScreen() {
             }
 
             if (response.ok) {
+                console.log('Datos recibidos del backend:', data);
                 const userData = {
                     id: data.id,
                     rol: data.rol,
                     rut: data.rut,
                     profesorId: data.profesor_id
                 };
-
+                console.log('userData que se guardará:', userData);
                 await login(data.token, userData);
                 
                 setUsuario('');
