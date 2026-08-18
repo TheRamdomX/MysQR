@@ -7,10 +7,10 @@ import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, Touchab
 import { GestureHandlerRootView, State } from 'react-native-gesture-handler';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.206.9:8088';
 
 interface Course {
   id: string;

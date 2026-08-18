@@ -3,8 +3,7 @@ import React, { useState } from 'react';
 import { Alert, ImageBackground, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
 import PublicRoute from '../components/PublicRoute';
 import { useAuth } from '../context/AuthContext';
-
-const API_URL = 'http://192.168.206.9:8088';
+import { API_URL } from '../services/api';
 
 export default function LoginScreen() {
     const [usuario, setUsuario] = useState('');

@@ -3,11 +3,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ProtectedRoute from '../components/ProtectedRoute';
+import { API_URL } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-
-const API_URL = 'http://192.168.206.9:8088';
 
 
 interface Attendance {

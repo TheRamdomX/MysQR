@@ -4,10 +4,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { AntDesign } from '@expo/vector-icons';
 import * as XLSX from 'xlsx';
+import { API_URL } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-const API_URL = 'http://192.168.206.9:8088';
 
 interface Attendance {
   [key: string]: {
