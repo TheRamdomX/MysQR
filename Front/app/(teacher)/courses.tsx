@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions, ScrollView } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import QRCode from 'react-native-qrcode-svg';
-import { useStoredUserData } from '../hooks/useStoredUserData';
-import { useProfessorSections, TeacherCourse } from '../hooks/useProfessorSections';
-import { useTeacherQr } from '../hooks/useTeacherQr';
-import { useCsvCourseImport } from '../hooks/useCsvCourseImport';
+import { useStoredUserData } from '@/hooks/useStoredUserData';
+import { useProfessorSections, TeacherCourse } from '@/hooks/useProfessorSections';
+import { useTeacherQr } from '@/hooks/useTeacherQr';
+import { useCsvCourseImport } from '@/hooks/useCsvCourseImport';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';

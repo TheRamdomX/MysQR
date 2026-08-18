@@ -4,10 +4,10 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import ProtectedRoute from '../components/ProtectedRoute';
-import { useAuth } from '../context/AuthContext';
-import { useStudentCourses, StudentCourse } from '../hooks/useStudentCourses';
-import { scanAttendance } from '../services/studentApi';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { useAuth } from '@/context/AuthContext';
+import { useStudentCourses, StudentCourse } from '@/hooks/useStudentCourses';
+import { scanAttendance } from '@/services/studentApi';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';

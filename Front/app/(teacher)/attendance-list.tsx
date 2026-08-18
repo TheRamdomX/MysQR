@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Platform, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { AntDesign } from '@expo/vector-icons';
 import * as XLSX from 'xlsx';
-import { API_URL } from '../services/api';
-import { SectionAttendanceRow } from '../types/domain';
+import { API_URL } from '@/services/api';
+import { SectionAttendanceRow } from '@/types/domain';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';

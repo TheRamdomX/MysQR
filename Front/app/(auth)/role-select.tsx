@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import PublicRoute from '../components/PublicRoute';
+import PublicRoute from '@/components/PublicRoute';
 
 interface MyButtonProps {
   title: string;
