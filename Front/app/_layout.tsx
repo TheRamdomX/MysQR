@@ -21,27 +21,20 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack initialRouteName="index">
+        <Stack initialRouteName="(auth)/index" screenOptions={{ headerShown: false }}>
           {/* Public Routes - Only accessible when NOT authenticated */}
-          <Stack.Screen 
-            name="index" 
-            options={{ 
-              headerShown: false,
-              animation: 'none'
-            }}
-          />
-          <Stack.Screen name="role-select" options={{ headerShown: false }} />
-          <Stack.Screen name="login-student" options={{ headerShown: false }} />
-          <Stack.Screen name="login-teacher" options={{ headerShown: false }} />
-          
+          <Stack.Screen name="(auth)/index" options={{ animation: 'none' }} />
+          <Stack.Screen name="(auth)/role-select" />
+          <Stack.Screen name="(auth)/login-student" />
+          <Stack.Screen name="(auth)/login-teacher" />
+
           {/* Teacher Routes - Only accessible by teachers */}
-          <Stack.Screen name="courses" options={{ headerShown: false }} />
-          <Stack.Screen name="attendance-list" options={{ headerShown: false }} />
-          
+          <Stack.Screen name="(teacher)/courses" />
+          <Stack.Screen name="(teacher)/attendance-list" />
+
           {/* Student Routes - Only accessible by students */}
-          <Stack.Screen name="student-courses" options={{ headerShown: false }} />
-          <Stack.Screen name="student-view" options={{ headerShown: false }} />
-          <Stack.Screen name="attendance-list-student" options={{ headerShown: false }} />
+          <Stack.Screen name="(student)/student-courses" />
+          <Stack.Screen name="(student)/attendance-list-student" />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

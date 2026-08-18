@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -11,10 +9,21 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - mysqr-network
+    networks: [mysqr-network]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks: [mysqr-network]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,152 +35,23 @@ services:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=mysqr-network"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:8088"
-      - "--providers.docker.network=mysqr-network"
-      - "--log.level=DEBUG"
+      - "--log.level=INFO"
     ports:
       - "80:80"
       - "8088:8088"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - mysqr-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - mysqr-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  student:
-    build:
-      context: .
-      dockerfile: student/Dockerfile
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.student.rule=PathPrefix(`/api/scan`)"
-      - "traefik.http.services.student.loadbalancer.server.port=8085"
-    ports:
-      - "8085:8085"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=asistencia_db
-      - DB_SSLMODE=disable
-    networks:
-      - mysqr-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    command: >
-      sh -c "
-        echo 'Waiting for postgres...' &&
-        while ! nc -z postgres 5432; do
-          sleep 1
-        done &&
-        echo 'PostgreSQL started' &&
-        ./app
-      "
-
-  teacher:
-    build:
-      context: .
-      dockerfile: teacher/Dockerfile
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
-      - "traefik.http.services.teacher.loadbalancer.server.port=8086"
-    ports:
-      - "8086:8086"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=asistencia_db
-      - DB_SSLMODE=disable
-    networks:
-      - mysqr-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    command: >
-      sh -c "
-        echo 'Waiting for postgres...' &&
-        while ! nc -z postgres 5432; do
-          sleep 1
-        done &&
-        echo 'PostgreSQL started' &&
-        ./app
-      "
-
-  qr:
-    build:
-      context: .
-      dockerfile: qr/Dockerfile
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.qr.entrypoints=websecure"
-      - "traefik.http.routers.qr.rule=PathPrefix(`/api/qr`)"
-      - "traefik.http.services.qr.loadbalancer.server.port=8087"
-      - "traefik.http.middlewares.qr-strip.stripprefix.prefixes=/api/qr"
-      - "traefik.http.routers.qr.middlewares=qr-strip"
-    ports:
-      - "8087:8087"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=asistencia_db
-      - DB_SSLMODE=disable
-    networks:
-      - mysqr-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    command: >
-      sh -c "
-        echo 'Waiting for postgres...' &&
-        while ! nc -z postgres 5432; do
-          sleep 1
-        done &&
-        echo 'PostgreSQL started' &&
-        ./app
-      "
+    networks: [mysqr-network]
 
   database:
-    build:
-      context: ./database
+    build: &build
+      context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: database
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.database.entrypoints=websecure"
@@ -179,33 +59,89 @@ services:
       - "traefik.http.services.database.loadbalancer.server.port=8084"
     ports:
       - "8084:8084"
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=asistencia_db
-      - DB_SSLMODE=disable
-    networks:
-      - mysqr-network
+    environment: &db-env
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: asistencia_db
+      DB_SSLMODE: disable
+    networks: [mysqr-network]
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres: {condition: service_healthy}
     restart: unless-stopped
-    command: >
-      sh -c "
-        echo 'Waiting for postgres...' &&
-        while ! nc -z postgres 5432; do
-          sleep 1
-        done &&
-        echo 'PostgreSQL started' &&
-        sleep 5 &&
-        ./app
-      "
+
+  qr:
+    build:
+      <<: *build
+      args:
+        SERVICE: qr
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.qr.entrypoints=websecure"
+      - "traefik.http.routers.qr.rule=PathPrefix(`/api/qr`)"
+      - "traefik.http.middlewares.qr-strip.stripprefix.prefixes=/api/qr"
+      - "traefik.http.routers.qr.middlewares=qr-strip"
+      - "traefik.http.services.qr.loadbalancer.server.port=8087"
+    ports:
+      - "8087:8087"
+    environment:
+      <<: *db-env
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks: [mysqr-network]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  teacher:
+    build:
+      <<: *build
+      args:
+        SERVICE: teacher
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.teacher.entrypoints=websecure"
+      - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
+      - "traefik.http.services.teacher.loadbalancer.server.port=8086"
+    ports:
+      - "8086:8086"
+    environment:
+      <<: *db-env
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks: [mysqr-network]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  student:
+    build:
+      <<: *build
+      args:
+        SERVICE: student
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.student.entrypoints=websecure"
+      - "traefik.http.routers.student.rule=PathPrefix(`/api/scan`)"
+      - "traefik.http.services.student.loadbalancer.server.port=8085"
+    ports:
+      - "8085:8085"
+    environment:
+      <<: *db-env
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks: [mysqr-network]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
 
 networks:
   mysqr-network:
     driver: bridge
 
 volumes:
-  postgres_data: 
+  postgres_data:

@@ -1,0 +1,26 @@
+# Dependencias
+Front/node_modules/
+
+# Builds
+Front/dist/
+Back/**/app
+Back/**/*-service
+
+# Cachés de Expo / Metro
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+
+# Go
+*.exe
+*.test
+*.out
+
+# Entorno
+.env
+.env.local
+
+# Editor / SO
+.DS_Store
+*.log

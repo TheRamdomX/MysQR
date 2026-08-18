@@ -146,31 +146,10 @@ func main() {
 		json.NewEncoder(w).Encode(moduleSection)
 	})
 
-	// 4. Registro en Asistencia (QR)
-	http.HandleFunc("/api/db/attendance/register", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var request struct {
-			AlumnoID      int    `json:"alumno_id"`
-			SeccionID     int    `json:"seccion_id"`
-			ModuloID      int    `json:"modulo_id"`
-			FechaRegistro string `json:"fecha_registro"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		if err := dbService.RegisterAttendance(request.AlumnoID, request.SeccionID, request.ModuloID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Asistencia registrada exitosamente"})
-	})
+	// El registro de asistencia por QR ya no se acepta acá: ahora lo hace el
+	// servicio `student` (POST /api/scan), que valida el QR contra Redis y la
+	// identidad contra el JWT antes de escribir. Este endpoint se eliminó
+	// porque quedaba abierto sin ninguna validación.
 
 	// 4.1. Registro en Asistencia manual
 	http.HandleFunc("/api/db/attendance/manual", func(w http.ResponseWriter, r *http.Request) {
@@ -289,22 +268,15 @@ func main() {
 			return
 		}
 
-		// Verificar que el estudiante existe y está inscrito en la sección
-		var exists bool
-		err = db.QueryRow(`
-			SELECT EXISTS (
-				SELECT 1 
-				FROM Inscripciones 
-				WHERE AlumnoID = $1 AND SeccionID = $2
-			)`, alumnoID, seccionID).Scan(&exists)
-
+		// Verificar que el estudiante está inscrito en la sección
+		enrolled, err := dbService.IsEnrolled(alumnoID, seccionID)
 		if err != nil {
 			log.Printf("Error al verificar inscripción: %v", err)
 			http.Error(w, "Error al verificar la inscripción del estudiante", http.StatusInternalServerError)
 			return
 		}
 
-		if !exists {
+		if !enrolled {
 			http.Error(w, "El estudiante no está inscrito en esta sección", http.StatusNotFound)
 			return
 		}

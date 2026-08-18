@@ -2,75 +2,104 @@ package main
 
 import (
 	"log"
-	"mysqr/student/pkg/encryption"
-	"mysqr/student/pkg/storage"
-	"mysqr/student/pkg/utils"
 	"net/http"
+	"os"
+	"strconv"
+
+	"mysqr/database/pkg/postgres"
+	"mysqr/pkg/authmw"
+	"mysqr/pkg/httpcors"
+	"mysqr/pkg/qrcode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
 	r := gin.Default()
+	r.Use(httpcors.Middleware())
 
-	r.POST("/api/scan", func(c *gin.Context) {
+	db, err := postgres.CreateConnection()
+	if err != nil {
+		log.Fatal("Error connecting to database:", err)
+	}
+	defer db.Close()
+	dbService := postgres.NewDatabaseService(db)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: getEnv("REDIS_HOST", "localhost") + ":" + getEnv("REDIS_PORT", "6379"),
+	})
+	store := qrcode.NewStore(rdb)
+
+	r.POST("/api/scan", authmw.RequireAuth(), func(c *gin.Context) {
+		claims := authmw.Claims(c)
+		if claims.Rol != "alumno" || claims.AlumnoID == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo un alumno puede escanear asistencia"})
+			return
+		}
+		alumnoID := *claims.AlumnoID
+
 		var request struct {
-			EncryptedQR string `json:"encryptedQR" binding:"required"`
-			StudentID   string `json:"studentID" binding:"required"`
-			ProfessorID string `json:"professorID" binding:"required"`
-			SectionID   string `json:"sectionID" binding:"required"`
-			ModuleID    string `json:"moduleID" binding:"required"`
+			QR string `json:"qr" binding:"required"`
 		}
-
 		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cuerpo de la solicitud inválido"})
 			return
 		}
 
-		qrData, err := encryption.DecryptData(request.EncryptedQR)
+		payload, err := qrcode.Decrypt(request.QR)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al desencriptar QR"})
-			return
-		}
-
-		// Validar que los datos del QR coincidan con los parámetros
-		if qrData.ProfessorID != request.ProfessorID ||
-			qrData.SectionID != request.SectionID ||
-			qrData.ModuleID != request.ModuleID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "QR inválido"})
 			return
 		}
 
-		// Verificar si el QR existe en Redis
-		key := utils.GenerateRedisKey(qrData.ClassID, qrData.UUID)
-		exists, err := storage.ValidateQR(key)
+		valid, err := store.Validate(c.Request.Context(), payload)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar QR"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar el QR"})
+			return
+		}
+		if !valid {
+			c.JSON(http.StatusNotFound, gin.H{"error": "QR expirado, pide uno nuevo"})
 			return
 		}
 
-		if !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "QR no encontrado o expirado"})
+		seccionID, err := strconv.Atoi(payload.SectionID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "QR inválido"})
+			return
+		}
+		moduloID, err := strconv.Atoi(payload.ModuleID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "QR inválido"})
 			return
 		}
 
-		// Publicar evento de validación exitosa
-		event := map[string]interface{}{
-			"type":        "validation",
-			"status":      "success",
-			"studentID":   request.StudentID,
-			"professorID": request.ProfessorID,
-			"sectionID":   request.SectionID,
-			"moduleID":    request.ModuleID,
-			"qrID":        qrData.UUID,
+		enrolled, err := dbService.IsEnrolled(alumnoID, seccionID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al verificar la inscripción"})
+			return
 		}
-
-		if err := storage.PublishEvent("qr_validations", event); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al publicar evento"})
+		if !enrolled {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No estás inscrito en esta sección"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "QR validado exitosamente"})
+		already, err := dbService.HasAttendance(alumnoID, seccionID, moduloID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al verificar la asistencia"})
+			return
+		}
+		if already {
+			c.JSON(http.StatusOK, gin.H{"status": "already_registered", "message": "Ya habías registrado tu asistencia"})
+			return
+		}
+
+		if err := dbService.RegisterAttendance(alumnoID, seccionID, moduloID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al registrar la asistencia"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "registered", "message": "Asistencia registrada exitosamente"})
 	})
 
 	log.Printf("Iniciando servidor Student en :8085")
@@ -79,25 +108,9 @@ func main() {
 	}
 }
 
-/* func logKafka(eventType string, data interface{}) {
-	msg, err := json.Marshal(map[string]interface{}{
-		"service":   "student",
-		"type":      eventType,
-		"data":      data,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
-	if err != nil {
-		log.Printf("Kafka marshal error: %v", err)
-		return
+func getEnv(key, defaultValue string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
 	}
-
-	if err := kafkaWriter.WriteMessages(ctx, kafka.Message{Value: msg}); err != nil {
-		log.Printf("Kafka write error: %v", err)
-	}
-} */
-
-/* Example usage to test:
-curl -X POST http://localhost:8082/scan -H "Content-Type: application/json" -d '{
-// "EncryptedQR": "QR",
-// "studentId": "ID" }'
-*/
+	return defaultValue
+}

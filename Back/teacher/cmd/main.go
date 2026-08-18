@@ -1,112 +1,84 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"strconv"
+
 	"mysqr/database/pkg/postgres"
-	"mysqr/teacher/pkg/encryption"
-	"mysqr/teacher/pkg/storage"
-	"mysqr/teacher/pkg/utils"
+	"mysqr/pkg/authmw"
+	"mysqr/pkg/httpcors"
+	"mysqr/pkg/qrcode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
 	r := gin.Default()
+	r.Use(httpcors.Middleware())
 
-	// Inicializar conexión a la base de datos
 	db, err := postgres.CreateConnection()
 	if err != nil {
 		log.Fatal("Error connecting to database:", err)
 	}
 	defer db.Close()
-
 	dbService := postgres.NewDatabaseService(db)
 
-	r.POST("/api/classes/:classId/start", func(c *gin.Context) {
-		classID := c.Param("classId")
-		professorID := c.GetHeader("X-Professor-ID")
-		sectionID := c.GetHeader("X-Section-ID")
-		moduleID := c.GetHeader("X-Module-ID")
+	rdb := redis.NewClient(&redis.Options{
+		Addr: getEnv("REDIS_HOST", "localhost") + ":" + getEnv("REDIS_PORT", "6379"),
+	})
+	store := qrcode.NewStore(rdb)
 
-		if professorID == "" || sectionID == "" || moduleID == "" {
-			c.JSON(400, gin.H{"error": "Missing required headers"})
+	r.POST("/api/classes/start", authmw.RequireAuth(), func(c *gin.Context) {
+		claims := authmw.Claims(c)
+		if claims.Rol != "profesor" || claims.ProfesorID == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo un profesor puede emitir un QR"})
 			return
 		}
 
-		// Generar datos del QR
-		qrData := utils.NewQRData(classID, professorID, sectionID, moduleID)
-
-		// Encriptar datos
-		encrypted, err := encryption.EncryptData(qrData)
+		moduleSection, err := dbService.GetCurrentModuleAndSection(*claims.ProfesorID)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to encrypt QR data"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if moduleSection == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No hay clase programada en este momento"})
 			return
 		}
 
-		// Publicar evento para almacenar en Redis
-		event := map[string]string{
-			"event_type":   "qr_start",
-			"class_id":     classID,
-			"professor_id": professorID,
-			"section_id":   sectionID,
-			"module_id":    moduleID,
-			"encrypted_qr": encrypted,
+		encrypted, err := store.Issue(
+			c.Request.Context(),
+			strconv.Itoa(moduleSection.SeccionID),
+			strconv.Itoa(*claims.ProfesorID),
+			strconv.Itoa(moduleSection.ModuloID),
+			qrcode.DefaultTTL,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo emitir el QR"})
+			return
 		}
-		payload, _ := json.Marshal(event)
-		storage.PublishEvent(payload)
 
-		// Retornar QR encriptado
-		c.JSON(200, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"encrypted_qr": encrypted,
+			"expires_in":   int(qrcode.DefaultTTL.Seconds()),
 			"data": gin.H{
-				"class_id":     classID,
-				"professor_id": professorID,
-				"section_id":   sectionID,
-				"module_id":    moduleID,
+				"section_id": moduleSection.SeccionID,
+				"module_id":  moduleSection.ModuloID,
 			},
 		})
-	})
-
-	r.POST("/api/classes/:classId/stop", func(c *gin.Context) {
-		classID := c.Param("classId")
-		event := map[string]string{
-			"event_type": "qr_stop",
-			"class_id":   classID,
-		}
-		payload, _ := json.Marshal(event)
-		storage.PublishEvent(payload)
-		c.JSON(200, gin.H{"message": "QR generation stopped"})
-	})
-
-	// Nuevo endpoint para obtener módulo actual y sección
-	r.GET("/api/professor/:professorId/current-class", func(c *gin.Context) {
-		professorID := c.Param("professorId")
-		if professorID == "" {
-			c.JSON(400, gin.H{"error": "Missing professor ID"})
-			return
-		}
-
-		// Convertir professorID a int
-		profID := 0
-		if _, err := fmt.Sscanf(professorID, "%d", &profID); err != nil {
-			c.JSON(400, gin.H{"error": "Invalid professor ID format"})
-			return
-		}
-
-		// Obtener módulo actual y sección
-		moduleSection, err := dbService.GetCurrentModuleAndSection(profID)
-		if err != nil {
-			c.JSON(404, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(200, moduleSection)
 	})
 
 	log.Printf("Iniciando servidor Teacher en :8086")
 	if err := r.Run(":8086"); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return defaultValue
 }
