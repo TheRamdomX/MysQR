@@ -4,26 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { API_URL } from '../services/api';
+import { StudentAttendanceRow, UserData } from '../types/domain';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-
-
-interface Attendance {
-  [key: string]: string;
-}
-
-interface StudentAttendance {
-  estudiante: string;
-  asistencia: Attendance;
-}
-
-interface UserData {
-  id: string;
-  rol: string;
-  rut: string;
-  alumnoId: string;
-}
 
 export default function AttendanceListStudent() {
   const router = useRouter();
@@ -31,7 +15,7 @@ export default function AttendanceListStudent() {
   const [hora, setHora] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [studentData, setStudentData] = useState<StudentAttendance | null>(null);
+  const [studentData, setStudentData] = useState<StudentAttendanceRow | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
@@ -98,7 +82,7 @@ export default function AttendanceListStudent() {
           throw new Error(`Error al cargar los datos de asistencia: ${response.status} - ${errorText}`);
         }
         
-        const data: StudentAttendance = await response.json();
+        const data: StudentAttendanceRow = await response.json();
         console.log('Debug - Response data:', data);
         
         if (!data || !data.estudiante || !data.asistencia) {

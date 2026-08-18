@@ -8,28 +8,13 @@ import { GestureHandlerRootView, State } from 'react-native-gesture-handler';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../services/api';
+import { CourseBase, SeccionAsignatura } from '../types/domain';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
-interface Course {
-  id: string;
-  nombre: string;
-  cit: string;
+interface Course extends CourseBase {
   asistencia: boolean[];
-}
-
-interface UserData {
-  id: string;
-  rol: string;
-  rut: string;
-  alumnoId: string;
-}
-
-interface SeccionAsignatura {
-  seccion_id: number;
-  asignatura_id: number;
-  nombre: string;
 }
 
 export default function CoursesStudent() {

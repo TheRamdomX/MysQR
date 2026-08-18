@@ -9,36 +9,20 @@ import QRCode from 'react-native-qrcode-svg';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { API_URL } from '../services/api';
+import { CourseBase, UserData, SeccionAsignatura } from '../types/domain';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
-interface Course {
-  id: string;
-  nombre: string;
-  cit: string;  
+interface Course extends CourseBase {
   asistencia: string[];
   dias: string[];
   bloque: string;
 }
 
-interface UserData {
-  id: string;
-  rol: string;
-  rut: string;
-  profesorId: string;
-}
-
 interface ModuleSection {
   modulo_id: number;
   seccion_id: number;
-}
-
-interface SeccionAsignatura {
-  seccion_id: number;
-  asignatura_id: number;
-  nombre: string;
-  codigo: string;
 }
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];

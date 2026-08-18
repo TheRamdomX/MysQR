@@ -5,35 +5,22 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import { AntDesign } from '@expo/vector-icons';
 import * as XLSX from 'xlsx';
 import { API_URL } from '../services/api';
+import { SectionAttendanceRow } from '../types/domain';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
-interface Attendance {
-  [key: string]: {
-    estado: string;
-    alumno_id: number;
-    modulo_id: number;
-  };
-}
-
-interface Student {
-  estudiante: string;
-  estudiante_id: number;
-  asistencia: Attendance;
-}
-
 export default function AttendanceList() {
   const router = useRouter();
   const { courseId } = useLocalSearchParams();
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<SectionAttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [editMode, setEditMode] = useState(false);
-  const [editedAttendance, setEditedAttendance] = useState<Student[] | null>(null);
+  const [editedAttendance, setEditedAttendance] = useState<SectionAttendanceRow[] | null>(null);
   const [hoveredStudent, setHoveredStudent] = useState<string | null>(null);
-  const [modifiedAttendance, setModifiedAttendance] = useState<{ [key: string]: Attendance }>({});
+  const [modifiedAttendance, setModifiedAttendance] = useState<{ [key: string]: SectionAttendanceRow['asistencia'] }>({});
 
   useEffect(() => {
     const fetchAttendanceData = async () => {
@@ -45,7 +32,7 @@ export default function AttendanceList() {
         }
         const data: any[] = await response.json();
         // Mapea los datos para incluir estudiante_id
-        const mappedData: Student[] = data.map((student: any) => ({
+        const mappedData: SectionAttendanceRow[] = data.map((student: any) => ({
           estudiante: student.estudiante,
           estudiante_id: student.estudiante_id, 
           asistencia: student.asistencia,
@@ -69,7 +56,7 @@ export default function AttendanceList() {
   }, [courseId]);
 
   // Función para calcular el porcentaje de asistencia de un estudiante
-  const calcularPorcentajeEstudiante = (student: Student) => {
+  const calcularPorcentajeEstudiante = (student: SectionAttendanceRow) => {
     const total = dates.length;
     const presentes = dates.filter(date => student.asistencia[date]?.estado === '🟢').length;
     return total === 0 ? 0 : Math.round((presentes / total) * 100);
