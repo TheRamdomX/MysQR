@@ -1,76 +1,27 @@
 import { AntDesign } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
-import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
-import { GestureHandlerRootView, State } from 'react-native-gesture-handler';
+import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../services/api';
-import { CourseBase, SeccionAsignatura } from '../types/domain';
+import { useStudentCourses, StudentCourse } from '../hooks/useStudentCourses';
+import { scanAttendance } from '../services/studentApi';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
-interface Course extends CourseBase {
-  asistencia: boolean[];
-}
-
 export default function CoursesStudent() {
   const router = useRouter();
-  const { logout, userData, userToken } = useAuth();
-  const [courses, setCourses] = useState<Course[]>([]);
+  const { userData, userToken } = useAuth();
+  const { courses } = useStudentCourses(userData?.alumnoId);
   const [qrVisible, setQrVisible] = useState(false);
   const [hora, setHora] = useState('');
   const [scanned, setScanned] = useState(false);
-  const [scannedData, setScannedData] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [zoom, setZoom] = useState(0);
-  const [lastZoom, setLastZoom] = useState(0);
   const cameraRef = useRef<CameraView>(null);
-
-  useEffect(() => {
-    const loadStudentSections = async () => {
-      if (!userData?.alumnoId) return;
-      
-      try {
-        const numId = parseInt(userData.alumnoId.toString());
-        if (isNaN(numId)) {
-          console.error('ID de alumno inválido');
-          return;
-        }
-        console.log('Cargando secciones para alumno:', numId);
-        const response = await fetch(`${API_URL}/api/db/sections/student/${numId}`);
-        console.log('Status de la respuesta:', response.status);
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${await response.text()}`);
-        }
-        const data: SeccionAsignatura[] = await response.json();
-        console.log('Datos de las secciones:', data);
-        const cursos = data.map(seccion => ({
-          id: seccion.seccion_id.toString(),
-          nombre: seccion.nombre,
-          cit: `CIT${seccion.asignatura_id}`,
-          asistencia: [] // Aquí podrías cargar el historial de asistencia si lo necesitas
-        }));
-        
-        setCourses(cursos);
-      } catch (error) {
-        console.error('Error al cargar las secciones:', error);
-      }
-    };
-    loadStudentSections();
-  }, [userData]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace('/login-student');
-    } catch (error) {
-      console.error('Error during logout:', error);
-    }
-  };
 
   useEffect(() => {
     if (permission && !permission.granted) {
@@ -91,40 +42,14 @@ export default function CoursesStudent() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
     try {
       setScanned(true);
-      setScannedData(data);
-
-      const response = await fetch(`${API_URL}/api/scan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({ qr: data }),
-      });
-
-      const result = await response.json();
-
-      if (response.status === 404) {
-        alert('QR expirado, pide uno nuevo');
-        return;
+      const result = await scanAttendance(data, userToken || '');
+      alert(result.message);
+      if (result.status === 'registered' || result.status === 'already_registered') {
+        setQrVisible(false);
       }
-      if (response.status === 403) {
-        alert('No estás inscrito en esta sección');
-        return;
-      }
-      if (response.status === 400) {
-        alert('QR inválido');
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(result.error || `Error al registrar asistencia: ${response.statusText}`);
-      }
-
-      alert(result.status === 'already_registered' ? 'Ya habías registrado tu asistencia' : '¡Asistencia registrada!');
-      setQrVisible(false);
     } catch (error) {
       console.error('Error al procesar el QR:', error);
       alert('Error al registrar asistencia');
@@ -140,7 +65,7 @@ export default function CoursesStudent() {
     return 1;
   };
 
-  const renderItem = ({ item }: { item: Course }) => {
+  const renderItem = ({ item }: { item: StudentCourse }) => {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{item.nombre}</Text>
@@ -153,34 +78,6 @@ export default function CoursesStudent() {
         </TouchableOpacity>
       </View>
     );
-  };
-
-  // Función para manejar el gesto de pinch (zoom)
-  const onPinchGestureEvent = (event: any) => {
-    const { scale } = event.nativeEvent;
-    const newZoom = Math.min(Math.max(lastZoom * scale, 0), 1);
-    setZoom(newZoom);
-  };
-
-  const onPinchHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.oldState === State.ACTIVE) {
-      setLastZoom(zoom);
-    }
-  };
-
-  // Función para manejar tap to focus
-  const handleTapToFocus = async (event: any) => {
-    if (!cameraRef.current) return;
-    
-    const { locationX, locationY } = event.nativeEvent;
-    
-    try {
-      const normalizedX = locationX / (event.nativeEvent.target?.layout?.width || 1) || 0.5;
-      const normalizedY = locationY / (event.nativeEvent.target?.layout?.height || 1) || 0.5;
-      console.log(`Enfocando en: ${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)}`);
-    } catch (error) {
-      console.error('Error al enfocar:', error);
-    }
   };
 
   // Controles manuales de zoom
@@ -224,7 +121,6 @@ export default function CoursesStudent() {
             style={styles.qrButton}
             onPress={() => {
               setScanned(false);
-              setScannedData('');
               setQrVisible(true);
             }}
           >

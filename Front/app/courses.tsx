@@ -1,29 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Image, Pressable, Platform, Dimensions, ScrollView } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
-import { useAuth } from '../context/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
-import * as FileSystem from 'expo-file-system';
-import * as DocumentPicker from 'expo-document-picker';
-import { API_URL } from '../services/api';
-import { CourseBase, UserData, SeccionAsignatura } from '../types/domain';
+import { useStoredUserData } from '../hooks/useStoredUserData';
+import { useProfessorSections, TeacherCourse } from '../hooks/useProfessorSections';
+import { useTeacherQr } from '../hooks/useTeacherQr';
+import { useCsvCourseImport } from '../hooks/useCsvCourseImport';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
-
-interface Course extends CourseBase {
-  asistencia: string[];
-  dias: string[];
-  bloque: string;
-}
-
-interface ModuleSection {
-  modulo_id: number;
-  seccion_id: number;
-}
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 const BLOQUES_HORARIOS = [
@@ -38,153 +25,18 @@ const BLOQUES_HORARIOS = [
 
 export default function Courses() {
   const router = useRouter();
-  const { userToken } = useAuth();
-  const [courses, setCourses] = useState<Course[]>([]);
+  const { userData } = useStoredUserData();
+  const { courses, setCourses } = useProfessorSections(userData?.profesorId);
   const [modalVisible, setModalVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [csvModalVisible, setCsvModalVisible] = useState(false);
   const [nombre, setNombre] = useState('');
   const [cit, setCit] = useState('');
-  const [estudiantes, setEstudiantes] = useState('');
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [currentClass, setCurrentClass] = useState<ModuleSection | null>(null);
-  const [qrData, setQrData] = useState<string>('');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('');
-  const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerResult | null>(null);
-  const [showAddOptions, setShowAddOptions] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
   const [bloqueSeleccionado, setBloqueSeleccionado] = useState<string>('');
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const storedData = await AsyncStorage.getItem('userData');
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          console.log('UserData cargado desde AsyncStorage:', parsedData);
-          setUserData(parsedData);
-          // Cargar datos de la clase actual
-          await loadCurrentClass(parsedData.profesorId);
-          // Cargar secciones del profesor
-          await loadProfessorSections(parsedData.profesorId);
-        }
-      } catch (error) {
-        console.error('Error al cargar datos del usuario:', error);
-      }
-    };
-    loadUserData();
-  }, []);
-
-  useEffect(() => {
-    if (!qrVisible || !userToken) {
-      return;
-    }
-
-    const fetchQr = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/classes/start`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${userToken}`,
-          },
-        });
-
-        if (response.status === 404) {
-          setCurrentClass(null);
-          setQrData('');
-          return;
-        }
-
-        if (!response.ok) {
-          console.error('Error al emitir QR:', await response.text());
-          return;
-        }
-
-        const result = await response.json();
-        setCurrentClass({
-          modulo_id: result.data.module_id,
-          seccion_id: result.data.section_id,
-        });
-        setQrData(result.encrypted_qr);
-      } catch (error) {
-        console.error('Error al emitir QR:', error);
-      }
-    };
-
-    fetchQr();
-    const interval = setInterval(fetchQr, 3000);
-    return () => clearInterval(interval);
-  }, [qrVisible, userToken]);
-
-  const loadProfessorSections = async (profesorId: string) => {
-    try {
-        const numId = parseInt(profesorId);
-        if (isNaN(numId)) {
-            console.error('ID de profesor inválido');
-            return;
-        }
-        console.log('Cargando secciones para profesor:', numId);
-        const response = await fetch(`${API_URL}/api/db/sections/professor/${numId}`);
-        console.log('Status de la respuesta:', response.status);
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${await response.text()}`);
-        }
-        const data: SeccionAsignatura[] = await response.json();
-        console.log('Datos de las secciones:', data);
-        const cursos = data.map(seccion => ({
-            id: seccion.seccion_id.toString(),
-            nombre: seccion.nombre,
-            cit: seccion.codigo,
-            asistencia: [],
-            dias: [],
-            bloque: ''
-        }));
-        
-        setCourses(cursos);
-    } catch (error) {
-        console.error('Error al cargar las secciones:', error);
-        // Mostrar mensaje de error al usuario
-    }
-};
-
-  const loadCurrentClass = async (profesorId: string) => {
-    try {
-      const numId = parseInt(profesorId);
-      if (isNaN(numId)) {
-        console.error('ID de profesor inválido');
-        return;
-      }
-      
-      console.log('Consultando clase actual para profesor:', numId);
-      const response = await fetch(`${API_URL}/api/db/professor/current-class?profesor_id=${numId}`);
-      console.log('Status de la respuesta:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Datos de la clase actual:', data);
-        if (data && data.modulo_id && data.seccion_id) {
-          setCurrentClass({
-            modulo_id: data.modulo_id,
-            seccion_id: data.seccion_id
-          });
-        } else {
-          setCurrentClass(null);
-        }
-      } else if (response.status === 404) {
-        console.log('No hay clase programada en este momento');
-        setCurrentClass(null);
-      } else {
-        const errorText = await response.text();
-        console.error('Error al cargar la clase actual:', errorText);
-        setCurrentClass(null);
-      }
-    } catch (error) {
-      console.error('Error al cargar la clase actual:', error);
-      setCurrentClass(null);
-    }
-  };
+  const { currentClass, qrData } = useTeacherQr(userData?.profesorId, qrVisible);
+  const csvImport = useCsvCourseImport();
 
   const toggleDia = (dia: string) => {
     if (diasSeleccionados.includes(dia)) {
@@ -209,14 +61,13 @@ export default function Courses() {
       ]);
       setNombre('');
       setCit('');
-      setEstudiantes('');
       setDiasSeleccionados([]);
       setBloqueSeleccionado('');
       setModalVisible(false);
     }
   };
 
-  const renderItem = ({ item }: { item: Course }) => (
+  const renderItem = ({ item }: { item: TeacherCourse }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.nombre}</Text>
       <Text style={styles.text}>Codigo: {item.cit}</Text>
@@ -230,337 +81,21 @@ export default function Courses() {
   );
 
   const handleFilePick = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/csv',
-        copyToCacheDirectory: true
-      });
-
-      if (result.assets && result.assets.length > 0) {
-        const fileName = result.assets[0].name;
-        console.log('Nombre del archivo seleccionado:', fileName);
-        
-        const match = fileName.match(/CIT\d+_CA\d+/);
-        
-        if (match) {
-          const codigo = match[0];
-          console.log('Código extraído:', codigo);
-          
-          setCit(codigo);
-          setSelectedFile(result);
-          setUploadStatus('Archivo seleccionado: ' + fileName);
-
-          try {
-            let fileContent: string;
-            
-            if (Platform.OS === 'web') {
-              // En web, el archivo ya está en memoria como base64
-              const base64Content = result.assets[0].uri.split(',')[1];
-              const binaryString = atob(base64Content);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              fileContent = new TextDecoder('utf-8').decode(bytes);
-            } else {
-              fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-                encoding: FileSystem.EncodingType.UTF8
-              });
-            }
-
-            console.log('Contenido del archivo:', fileContent.substring(0, 200)); // Mostrar los primeros 200 caracteres para debug
-
-            // Obtener las líneas del archivo
-            const lines = fileContent.split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0);
-
-            console.log('Número de líneas encontradas:', lines.length);
-
-            const firstStudentLine = lines.find(line => 
-              !line.includes('Student,ID') && 
-              !line.includes('Points Possible') &&
-              line.includes('"') 
-            );
-
-            console.log('Primera línea de estudiante encontrada:', firstStudentLine);
-
-            if (firstStudentLine) {
-              const matches = firstStudentLine.match(/"([^"]*)",([^,]*),([^,]*),([^,]*),([^,]*)/);
-              if (matches && matches[5]) {
-                const courseName = matches[5].trim();
-                setNombre(courseName);
-                console.log('Nombre del curso extraído:', courseName);
-              } else {
-                console.error('No se pudo extraer el nombre del curso del CSV');
-                setUploadStatus('Error: No se pudo extraer el nombre del curso del CSV');
-              }
-            } else {
-              console.error('No se encontró ninguna línea de estudiante en el CSV');
-              setUploadStatus('Error: No se encontró ninguna línea de estudiante en el CSV');
-            }
-          } catch (error) {
-            console.error('Error al leer el archivo CSV:', error);
-            setUploadStatus('Error al leer el archivo CSV');
-          }
-        } else {
-          console.error('Formato de archivo incorrecto. El nombre debe contener el código en formato CIT1000_CA16');
-          setUploadStatus('Error: El nombre del archivo debe contener el código en formato CIT1000_CA16');
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error al seleccionar archivo:', error);
-      setUploadStatus('Error al seleccionar archivo');
-    }
-  };
-
-  const cleanStudentData = (student: any) => {
-    const fullName = student.Student?.trim() || '';
-    
-    if (fullName === 'Points Possible') {
-      return null;
-    }
-
-    const normalizeText = (text: string) => {
-      return text
-        .replace(/Ã¡/g, 'á')
-        .replace(/Ã©/g, 'é')
-        .replace(/Ã­/g, 'í')
-        .replace(/Ã³/g, 'ó')
-        .replace(/Ãº/g, 'ú')
-        .replace(/Ã±/g, 'ñ')
-        .replace(/Ã/g, 'Á')
-        .replace(/Ã‰/g, 'É')
-        .replace(/Ã/g, 'Í')
-        .replace(/Ã"/g, 'Ó')
-        .replace(/Ãš/g, 'Ú')
-        .replace(/Ã'/g, 'Ñ')
-        .replace(/\\x81/g, 'Á')
-        .replace(/\\x8D/g, 'Í')
-        .replace(/\\x93/g, 'Ó')
-        .replace(/\\x9A/g, 'Ú')
-        .replace(/\\x91/g, 'Ñ')
-        .replace(/\\x8DN/g, 'ÍN')
-        .replace(/\\x81S/g, 'ÁS')
-        .replace(/\\x93N/g, 'ÓN')
-        .replace(/\\x9AS/g, 'ÚS')
-        .replace(/\\x91O/g, 'ÑO')
-        .replace(/"/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
-
-    const nameParts = fullName.split(',').map((part: string) => normalizeText(part.trim()));
-    if (nameParts.length < 2) {
-      console.warn('Formato de nombre inválido:', fullName);
-      return null;
-    }
-
-    const apellido = nameParts[0];
-    const nombre = nameParts[1];
-    const nombreCompleto = `${nombre} ${apellido}`;
-    const primerNombre = nombre.split(' ')[0]; // Extraer solo el primer nombre
-
-    const id = student.ID?.trim() || '';
-    const sisUserId = student['SIS User ID']?.trim() || '';
-    const sisLoginId = student['SIS Login ID']?.trim() || '';
-
-    console.log('Datos del estudiante procesados:', {
-      id: id,
-      nombreCompleto: nombreCompleto,
-      primerNombre: primerNombre
-    });
-
-    return {
-      id: id,
-      Nombre: primerNombre,
-      NombreCompleto: nombreCompleto,
-      Rut: sisUserId,
-      Email: sisLoginId
-    };
-  };
-
-  const processCSVInBatches = async (fileUri: string) => {
-    try {
-      let fileContent: string;
-      
-      if (Platform.OS === 'web') {
-        // Leer el archivo directamente como texto UTF-8
-        const response = await fetch(fileUri);
-        const blob = await response.blob();
-        fileContent = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const content = reader.result as string;
-            // Verificar si el contenido está en base64
-            if (content.startsWith('data:text/csv;base64,')) {
-              try {
-                // Extraer la parte base64 y decodificarla
-                const base64Content = content.split(',')[1];
-                // Usar TextDecoder para manejar correctamente la codificación UTF-8
-                const binaryString = atob(base64Content);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                const decodedContent = new TextDecoder('utf-8').decode(bytes);
-                console.log('Contenido decodificado correctamente:', decodedContent.substring(0, 200));
-                resolve(decodedContent);
-              } catch (error) {
-                console.error('Error al decodificar base64:', error);
-                reject(error);
-              }
-            } else {
-              resolve(content);
-            }
-          };
-          reader.onerror = reject;
-          reader.readAsText(blob, 'UTF-8');
-        });
-      } else {
-        fileContent = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.UTF8
-        });
-      }
-
-      console.log('Contenido decodificado del archivo CSV:', fileContent);
-
-      // Procesar el CSV línea por línea
-      const lines = fileContent.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
-          // Usar una expresión regular más robusta para manejar campos con comillas
-          const matches = line.match(/"([^"]*)",([^,]*),([^,]*),([^,]*),([^,]*)/);
-          if (matches) {
-            return {
-              Student: matches[1],
-              ID: matches[2],
-              'SIS User ID': matches[3],
-              'SIS Login ID': matches[4],
-              Section: matches[5]
-            };
-          }
-          return null;
-        })
-        .filter(line => line !== null);
-
-      console.log('Líneas procesadas del CSV:', lines.length);
-      console.log('Primera línea de ejemplo:', lines[0]);
-
-      const headers = ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Section'];
-      console.log('Encabezados del CSV:', headers);
-
-      const batchSize = 50;
-      const totalBatches = Math.ceil((lines.length - 1) / batchSize);
-      
-      console.log('Configuración de lotes:', {
-        batchSize,
-        totalBatches,
-        totalLines: lines.length
-      });
-
-      setUploadStatus('Procesando archivo...');
-      setUploadProgress(0);
-
-      for (let i = 1; i < lines.length; i += batchSize) {
-        const batch = lines.slice(i, i + batchSize);
-        console.log(`Procesando lote ${Math.floor(i/batchSize) + 1} de ${totalBatches}`);
-        console.log('Tamaño del lote actual:', batch.length);
-
-        const batchData = batch
-          .map(line => cleanStudentData(line))
-          .filter(student => student !== null);
-
-        console.log('Datos limpios del lote:', batchData.length, 'estudiantes');
-
-        if (batchData.length === 0) {
-          console.log('Lote vacío, saltando...');
-          continue;
-        }
-
-        const url = `${API_URL}/api/db/sections/students/batch`;
-        console.log('URL del endpoint:', url);
-        console.log('Datos a enviar:', JSON.stringify({ 
-          students: batchData,
-          curso: {
-            codigo: cit,
-            nombre: nombre,
-            dias: diasSeleccionados,
-            bloque: bloqueSeleccionado ? bloqueSeleccionado.slice(-5) : ''
-          }
-        }, null, 2));
-
-        try {
-          console.log('Iniciando petición al backend...');
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Profesor-ID': userData?.profesorId || ''
-            },
-            body: JSON.stringify({ 
-              students: batchData,
-              curso: {
-                codigo: cit,
-                nombre: nombre,
-                dias: diasSeleccionados,
-                bloque: bloqueSeleccionado ? bloqueSeleccionado.slice(-5) : ''
-              }
-            }),
-          });
-
-          console.log('Respuesta recibida:', response.status, response.statusText);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error en la respuesta del servidor:', errorText);
-            throw new Error(`Error en lote ${Math.floor(i/batchSize) + 1}: ${errorText}`);
-          }
-
-          const responseData = await response.json();
-          console.log('Datos de respuesta:', responseData);
-        } catch (error) {
-          console.error('Error completo:', error);
-          throw error;
-        }
-
-        const progress = Math.round(((i + batch.length - 1) / (lines.length - 1)) * 100);
-        setUploadProgress(progress);
-        setUploadStatus(`Procesando lote ${Math.floor(i/batchSize) + 1} de ${totalBatches}`);
-      }
-
-      console.log('Proceso completado exitosamente');
-      setUploadStatus('¡Archivo procesado con éxito!');
-      setTimeout(() => {
-        setCsvModalVisible(false);
-        setUploadProgress(0);
-        setUploadStatus('');
-        setSelectedFile(null);
-      }, 2000);
-    } catch (error) {
-      console.error('Error procesando CSV:', error);
-      setUploadStatus('Error al procesar el archivo');
+    const extracted = await csvImport.pickFile();
+    if (extracted) {
+      setCit(extracted.codigo);
+      setNombre(extracted.nombre);
     }
   };
 
   const handleUpload = async () => {
-    if (!selectedFile?.assets || selectedFile.assets.length === 0) {
-      setUploadStatus('Por favor, seleccione un archivo primero');
-      return;
-    }
-
-    if (!cit || !nombre) {
-      setUploadStatus('Error: No se pudo extraer el código o la sección del archivo');
-      return;
-    }
-
-    const fileUri = Platform.OS === 'web' 
-      ? URL.createObjectURL(new Blob([selectedFile.assets[0].uri]))
-      : selectedFile.assets[0].uri;
-
-    await processCSVInBatches(fileUri);
+    await csvImport.upload({
+      cit,
+      nombre,
+      dias: diasSeleccionados,
+      bloque: bloqueSeleccionado,
+      profesorId: userData?.profesorId || '',
+    });
   };
 
   return (
@@ -724,12 +259,12 @@ export default function Courses() {
                 onPress={handleFilePick}
               >
                 <Text style={styles.uploadButtonText}>
-                  {selectedFile?.assets && selectedFile.assets.length > 0 ? 'Cambiar archivo' : 'Seleccionar archivo'}
+                  {csvImport.selectedFile?.assets && csvImport.selectedFile.assets.length > 0 ? 'Cambiar archivo' : 'Seleccionar archivo'}
                 </Text>
               </TouchableOpacity>
 
-              {selectedFile?.assets && selectedFile.assets.length > 0 && (
-                <Text style={styles.fileName}>{selectedFile.assets[0].name}</Text>
+              {csvImport.selectedFile?.assets && csvImport.selectedFile.assets.length > 0 && (
+                <Text style={styles.fileName}>{csvImport.selectedFile.assets[0].name}</Text>
               )}
 
               <Text style={styles.sectionTitle}>Días de la semana (máx. 3)</Text>
@@ -774,22 +309,22 @@ export default function Courses() {
                 ))}
               </ScrollView>
 
-              {uploadProgress > 0 && (
+              {csvImport.uploadProgress > 0 && (
                 <View style={styles.progressContainer}>
-                  <View style={[styles.progressBar, { width: `${uploadProgress}%` }]} />
-                  <Text style={styles.progressText}>{uploadProgress}%</Text>
+                  <View style={[styles.progressBar, { width: `${csvImport.uploadProgress}%` }]} />
+                  <Text style={styles.progressText}>{csvImport.uploadProgress}%</Text>
                 </View>
               )}
 
-              <Text style={styles.statusText}>{uploadStatus}</Text>
+              <Text style={styles.statusText}>{csvImport.uploadStatus}</Text>
 
               <TouchableOpacity 
                 style={[
                   styles.uploadButton,
-                  (!selectedFile?.assets || selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado) && styles.uploadButtonDisabled
+                  (!csvImport.selectedFile?.assets || csvImport.selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado) && styles.uploadButtonDisabled
                 ]} 
                 onPress={handleUpload}
-                disabled={!selectedFile?.assets || selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado}
+                disabled={!csvImport.selectedFile?.assets || csvImport.selectedFile.assets.length === 0 || diasSeleccionados.length === 0 || !bloqueSeleccionado}
               >
                 <Text style={styles.uploadButtonText}>Subir</Text>
               </TouchableOpacity>
