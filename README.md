@@ -10,7 +10,7 @@
 
 MysQR es una aplicación móvil y sistema backend para la gestión de asistencia mediante códigos QR. Permite a los profesores generar códigos QR para sus clases y a los estudiantes registrar su asistencia escaneando estos códigos.
 
-## 🚀 Características
+## Características
 
 - Generación dinámica de códigos QR para clases
 - Escaneo de códigos QR para registro de asistencia
@@ -18,64 +18,56 @@ MysQR es una aplicación móvil y sistema backend para la gestión de asistencia
 - Sistema de microservicios escalable
 - Aplicación móvil multiplataforma (iOS/Android)
 
-## 🏗️ Arquitectura
+## Uso de la Aplicación
+
+1. **Profesores**:
+   - Iniciar sesión en la aplicación
+   - Abrir "Generar QR": el backend deriva la sección/módulo vigente según el horario y muestra un código que se renueva solo cada pocos segundos mientras el modal esté abierto
+   - Cerrar el modal cuando termine la clase (el código deja de renovarse y expira solo)
+
+2. **Estudiantes**:
+   - Iniciar sesión en la aplicación
+   - Escanear el código QR de la clase
+   - Confirmar asistencia
+
+## Arquitectura
 
 El proyecto está dividido en dos partes principales:
 
 ### Backend (Go)
 
-El backend está compuesto por tres microservicios:
+`Back/` es un único módulo Go (`mysqr`, un solo `go.mod`) con cuatro binarios independientes bajo `<servicio>/cmd`, más paquetes compartidos en `Back/pkg/`. Traefik enruta todo por prefijo de path detrás de un único host:puerto (`:8088`).
 
-1. **QR Service** (Puerto 8080)
-   - Generación y actualización de códigos QR
-   - Comunicación mediante Redis
-   - Gestión de validaciones
+1. **Database Service** (`/api/db`, puerto 8084)
+   - Única capa de acceso a Postgres; el resto de los servicios que necesitan la base la importan en proceso (`mysqr/database/pkg/postgres`), no le pegan por HTTP
+   - Secciones, reportes de asistencia (dos funciones PL/pgSQL), alta manual de asistencia, carga masiva de alumnos por CSV
 
-2. **Teacher Service** (Puerto 8081)
-   - API REST para profesores
-   - Endpoints para iniciar/detener generación de QR
-   - Gestión de clases
+2. **QR/Auth Service** (`/api/qr`, puerto 8087)
+   - Login por rol y emisión de JWT (`POST /login`)
+   - Validación de sesión al abrir la app (`POST /validate-token`)
 
-3. **Student Service** (Puerto 8082)
-   - API para validación de códigos QR
-   - Procesamiento de escaneos
-   - Registro de asistencia
+3. **Teacher Service** (`/api/classes`, puerto 8086)
+   - `POST /api/classes/start`: exige JWT de profesor, deriva la sección/módulo vigente desde el horario y emite un QR cifrado con vigencia corta (TTL en Redis), sin confiar en nada que mande el cliente
+
+4. **Student Service** (`/api/scan`, puerto 8085)
+   - `POST /api/scan`: exige JWT de alumno, descifra el QR, valida que siga vigente en Redis, que el alumno esté inscrito en esa sección y que no haya marcado ya esa clase, y recién ahí escribe en `Asistencia`
+
+Paquetes compartidos en `Back/pkg/`: `qrcode` (cifrado y store de Redis del QR), `authmw` (middleware de JWT para Gin) y `httpcors`.
 
 ### Frontend (React Native/Expo)
 
-- Aplicación móvil multiplataforma
-- Interfaz de usuario moderna y responsiva
-- Soporte para iOS y Android
-- Navegación basada en archivos
+`Front/` es la raíz del proyecto Expo (no `Front/app` — esa carpeta es solo el árbol de rutas de Expo Router).
 
-## 🛠️ Tecnologías Utilizadas
+- `app/` — pantallas, agrupadas por rol con *route groups* que no afectan la URL: `(auth)/` (home, selección de rol, logins), `(teacher)/` (cursos, lista de asistencia), `(student)/` (cursos, lista de asistencia)
+- `services/` — llamadas HTTP puras a cada servicio del backend (`api.ts` centraliza la URL base)
+- `hooks/` — estado y efectos de React que envuelven esos servicios
+- `types/domain.ts` — tipos de dominio compartidos entre pantallas
+- `context/AuthContext.tsx` — sesión (token JWT, datos del usuario) persistida en `AsyncStorage`
+- Soporte iOS/Android/web
 
-### Backend
-- **[Go](https://golang.org/)** - Lenguaje principal de programación
-- **[Redis](https://redis.io/)** - Base de datos en memoria para comunicación entre servicios
-- **[Docker](https://www.docker.com/)** - Contenedorización de servicios
-- **[Docker Compose](https://docs.docker.com/compose/)** - Orquestación de contenedores
-- **[Traefik](https://traefik.io/)** - Proxy inverso y balanceador de carga
-- **[Gin](https://gin-gonic.com/)** - Framework web para Go
-- **[GORM](https://gorm.io/)** - ORM para Go
 
-### Frontend
-- **[React Native](https://reactnative.dev/)** - Framework para desarrollo móvil
-- **[Expo](https://expo.dev/)** - Plataforma de desarrollo móvil
-- **[TypeScript](https://www.typescriptlang.org/)** - Superset tipado de JavaScript
-- **[React Navigation](https://reactnavigation.org/)** - Navegación entre pantallas
-- **[React Native Paper](https://callstack.github.io/react-native-paper/)** - Componentes de UI
-- **[Axios](https://axios-http.com/)** - Cliente HTTP
 
-## 🛠️ Requisitos Previos
-
-- Go (versiones especificadas en go.mod)
-- Node.js y npm
-- Docker y Docker Compose
-- Redis
-- Expo CLI
-
-## 🚀 Instalación y Ejecución
+## Instalación y Ejecución
 
 ### Backend
 
@@ -84,39 +76,36 @@ El backend está compuesto por tres microservicios:
    cd Back
    ```
 
-2. Iniciar los servicios con Docker Compose:
+2. Levantar todo (Postgres, Redis, Traefik y los cuatro servicios) con Docker Compose:
    ```bash
-   docker-compose up -d
+   make up
+   # equivale a: docker compose up -d --build
    ```
 
-Para desarrollo local, cada microservicio puede ejecutarse individualmente:
+   La API queda disponible completa en `http://localhost:8088` (Traefik enruta `/api/db`, `/api/qr`, `/api/classes` y `/api/scan` a cada servicio).
 
-#### QR Service
+3. Para bajarlo o ver logs:
+   ```bash
+   make down
+   make logs
+   ```
+
+Para desarrollo local sin Docker, todos los servicios comparten un único `go.mod` en la raíz de `Back/` — no hace falta `go mod init` por servicio. Con Postgres y Redis corriendo (por ejemplo, `docker compose up -d postgres redis`), cada uno se levanta con:
+
 ```bash
-cd qr
-make install
-make run
+make run-database   # :8084
+make run-qr         # :8087
+make run-teacher    # :8086
+make run-student    # :8085
 ```
 
-#### Teacher Service
-```bash
-cd teacher
-make install
-make run
-```
-
-#### Student Service
-```bash
-cd student
-make install
-make run
-```
+Otros targets útiles: `make build` (compila los cuatro), `make vet`, `make fmt`, `make tidy`.
 
 ### Frontend
 
-1. Navegar al directorio de la aplicación:
+1. Navegar al directorio del proyecto Expo (la raíz es `Front/`, no `Front/app` — esa carpeta es solo el árbol de rutas):
    ```bash
-   cd Front/app
+   cd Front
    ```
 
 2. Instalar dependencias:
@@ -124,36 +113,14 @@ make run
    npm install
    ```
 
-3. Iniciar la aplicación:
+3. Si el backend no corre en `localhost`, ajustar la URL base en `services/api.ts` (es el único lugar donde se declara):
+   ```ts
+   export const API_URL = 'http://<tu-ip>:8088';
+   ```
+
+4. Iniciar la aplicación:
    ```bash
    npx expo start
    ```
 
-## 📱 Uso de la Aplicación
 
-1. **Profesores**:
-   - Iniciar sesión en la aplicación
-   - Seleccionar una clase
-   - Generar código QR para la asistencia
-   - Detener la generación cuando sea necesario
-
-2. **Estudiantes**:
-   - Iniciar sesión en la aplicación
-   - Escanear el código QR de la clase
-   - Confirmar asistencia
-
-## 🤝 Contribución
-
-1. Fork el proyecto
-2. Crear una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abrir un Pull Request
-
-## 📝 Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
-
-## 📧 Contacto
-
-Para preguntas y soporte, por favor abrir un issue en el repositorio. 
