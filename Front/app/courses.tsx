@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, I
 import { AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ProtectedRoute from '../components/ProtectedRoute';
+import { useAuth } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
-import CryptoJS from 'crypto-js';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -41,13 +41,6 @@ interface SeccionAsignatura {
   codigo: string;
 }
 
-const encryptQRData = (data: any) => {
-  const key = "32-byte-long-secret-key-12345678";
-  const jsonString = JSON.stringify(data);
-  const encrypted = CryptoJS.AES.encrypt(jsonString, key).toString();
-  return encrypted;
-};
-
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 const BLOQUES_HORARIOS = [
   '8:30-10:00',
@@ -61,6 +54,7 @@ const BLOQUES_HORARIOS = [
 
 export default function Courses() {
   const router = useRouter();
+  const { userToken } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
@@ -99,24 +93,46 @@ export default function Courses() {
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newQrData = {
-        profesorid: userData?.profesorId,
-        moduloid: currentClass?.modulo_id,
-        seccionid: currentClass?.seccion_id,
-        FechaRegistro: new Date().toLocaleTimeString('en-US', { 
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        })
-      };
-      const encryptedData = encryptQRData(newQrData);
-      setQrData(encryptedData);
-    }, 3000);
+    if (!qrVisible || !userToken) {
+      return;
+    }
 
+    const fetchQr = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/classes/start`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${userToken}`,
+          },
+        });
+
+        if (response.status === 404) {
+          setCurrentClass(null);
+          setQrData('');
+          return;
+        }
+
+        if (!response.ok) {
+          console.error('Error al emitir QR:', await response.text());
+          return;
+        }
+
+        const result = await response.json();
+        setCurrentClass({
+          modulo_id: result.data.module_id,
+          seccion_id: result.data.section_id,
+        });
+        setQrData(result.encrypted_qr);
+      } catch (error) {
+        console.error('Error al emitir QR:', error);
+      }
+    };
+
+    fetchQr();
+    const interval = setInterval(fetchQr, 3000);
     return () => clearInterval(interval);
-  }, [userData, currentClass]);
+  }, [qrVisible, userToken]);
 
   const loadProfessorSections = async (profesorId: string) => {
     try {

@@ -132,6 +132,28 @@ func (s *DatabaseService) RegisterAttendance(alumnoID, seccionID, moduloID int) 
 	return err
 }
 
+// IsEnrolled indica si un alumno está inscrito en una sección.
+func (s *DatabaseService) IsEnrolled(alumnoID, seccionID int) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM Inscripciones WHERE AlumnoID = $1 AND SeccionID = $2
+		)`, alumnoID, seccionID).Scan(&exists)
+	return exists, err
+}
+
+// HasAttendance indica si ya existe un registro de asistencia (QR o manual)
+// para ese alumno en ese módulo de esa sección.
+func (s *DatabaseService) HasAttendance(alumnoID, seccionID, moduloID int) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM Asistencia
+			WHERE AlumnoID = $1 AND SeccionID = $2 AND ModuloID = $3
+		)`, alumnoID, seccionID, moduloID).Scan(&exists)
+	return exists, err
+}
+
 // 4.1. Registro en Asistencia manual
 func (s *DatabaseService) RegisterManualAttendance(alumnoID, seccionID, moduloID int) error {
 	insertQuery := `

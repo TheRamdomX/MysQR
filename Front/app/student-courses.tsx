@@ -7,7 +7,6 @@ import { Dimensions, FlatList, Image, Modal, Platform, StyleSheet, Text, Touchab
 import { GestureHandlerRootView, State } from 'react-native-gesture-handler';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
-import CryptoJS from 'crypto-js';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -33,21 +32,9 @@ interface SeccionAsignatura {
   nombre: string;
 }
 
-const decryptQRData = (encryptedData: string) => {
-  try {
-    const key = "32-byte-long-secret-key-12345678";
-    const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
-    const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
-    return JSON.parse(decryptedString);
-  } catch (error) {
-    console.error('Error decrypting QR data:', error);
-    return null;
-  }
-};
-
 export default function CoursesStudent() {
   const router = useRouter();
-  const { logout, userData } = useAuth();
+  const { logout, userData, userToken } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
   const [hora, setHora] = useState('');
@@ -123,56 +110,39 @@ export default function CoursesStudent() {
     try {
       setScanned(true);
       setScannedData(data);
-      
-      const qrData = decryptQRData(data);
-      if (!qrData) {
-        console.error('Error al desencriptar QR');
-        return;
-      }
-      console.log('QR Data decrypted:', qrData);
 
-      if (!qrData.moduloid || !qrData.seccionid || !qrData.FechaRegistro) {
-        console.error('QR inválido: faltan datos necesarios');
-        return;
-      }
-
-      const qrTime = qrData.FechaRegistro.split(':').map(Number);
-      const currentTime = hora.split(':').map(Number);
-      
-      const qrSeconds = qrTime[0] * 3600 + qrTime[1] * 60 + qrTime[2];
-      const currentSeconds = currentTime[0] * 3600 + currentTime[1] * 60 + currentTime[2];
-      
-      const timeDiff = Math.abs(currentSeconds - qrSeconds);
-      if (timeDiff > 5) {
-        alert('QR expirado');
-        return;
-      }
-
-      // Enviar datos al backend
-      const response = await fetch(`${API_URL}/api/db/attendance/register`, {
+      const response = await fetch(`${API_URL}/api/scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
         },
-        body: JSON.stringify({
-          alumno_id: userData?.alumnoId,
-          seccion_id: qrData.seccionid,
-          modulo_id: qrData.moduloid,
-          fecha_registro: new Date().toISOString()
-        }),
+        body: JSON.stringify({ qr: data }),
       });
 
+      const result = await response.json();
+
+      if (response.status === 404) {
+        alert('QR expirado, pide uno nuevo');
+        return;
+      }
+      if (response.status === 403) {
+        alert('No estás inscrito en esta sección');
+        return;
+      }
+      if (response.status === 400) {
+        alert('QR inválido');
+        return;
+      }
       if (!response.ok) {
-        throw new Error(`Error al registrar asistencia: ${response.statusText}`);
+        throw new Error(result.error || `Error al registrar asistencia: ${response.statusText}`);
       }
 
-      const result = await response.json();
-      console.log('Asistencia registrada:', result);
-      alert('¡Asistencia registrada!');
-      // Cerrar el modal después de un registro exitoso
+      alert(result.status === 'already_registered' ? 'Ya habías registrado tu asistencia' : '¡Asistencia registrada!');
       setQrVisible(false);
     } catch (error) {
       console.error('Error al procesar el QR:', error);
+      alert('Error al registrar asistencia');
     }
   };
 

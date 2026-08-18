@@ -103,7 +103,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.teacher.entrypoints=websecure"
-      - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`) || PathPrefix(`/api/professor`)"
+      - "traefik.http.routers.teacher.rule=PathPrefix(`/api/classes`)"
       - "traefik.http.services.teacher.loadbalancer.server.port=8086"
     ports:
       - "8086:8086"
