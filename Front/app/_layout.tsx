@@ -40,7 +40,6 @@ export default function RootLayout() {
           
           {/* Student Routes - Only accessible by students */}
           <Stack.Screen name="student-courses" options={{ headerShown: false }} />
-          <Stack.Screen name="student-view" options={{ headerShown: false }} />
           <Stack.Screen name="attendance-list-student" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />

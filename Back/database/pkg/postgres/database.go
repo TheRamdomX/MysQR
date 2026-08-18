@@ -39,13 +39,6 @@ type DatabaseService struct {
 	db *sql.DB
 }
 
-type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Rol      string `json:"rol"`
-	Rut      int    `json:"rut"`
-}
-
 func CreateConnection() (*sql.DB, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
@@ -183,29 +176,6 @@ func (s *DatabaseService) GetSectionsByStudent(alumnoID int) ([]models.SeccionAs
 	return sections, nil
 }
 
-// 6. Obtener registros de ReporteAsistencia
-func (s *DatabaseService) GetAttendanceReport(seccionID int) ([]models.ReporteAsistencia, error) {
-	query := `
-		SELECT * FROM obtener_asistencia_por_seccion($1);
-	`
-	rows, err := s.db.Query(query, seccionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var reports []models.ReporteAsistencia
-	for rows.Next() {
-		var report models.ReporteAsistencia
-		err := rows.Scan(&report.Nombre, &report.FechaRegistro)
-		if err != nil {
-			return nil, err
-		}
-		reports = append(reports, report)
-	}
-	return reports, nil
-}
-
 // 3.1 Obtener ModuloID actual y SeccionID de ProgramacionClases para un profesor
 func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.ModuloSeccion, error) {
 	// Primero obtenemos el módulo actual
@@ -237,23 +207,6 @@ func (s *DatabaseService) GetCurrentModuleAndSection(profesorID int) (*models.Mo
 		ModuloID:  moduleID,
 		SeccionID: seccionID,
 	}, nil
-}
-
-func ValidateUser(username, password, rol string, db *sql.DB) (*User, error) {
-	var user User
-	query := `
-		SELECT id, username, rol, rut 
-		FROM AUTH 
-		WHERE username = $1 AND password_hash = $2 AND rol = $3
-	`
-	err := db.QueryRow(query, username, password, rol).Scan(&user.ID, &user.Username, &user.Rol, &user.Rut)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("credenciales inválidas")
-		}
-		return nil, err
-	}
-	return &user, nil
 }
 
 // ProcesarLoteEstudiantes procesa un lote de estudiantes y crea el curso
